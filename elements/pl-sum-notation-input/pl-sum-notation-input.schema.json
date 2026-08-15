@@ -2,10 +2,6 @@
   "$schema": "http://json-schema.org/draft-06/schema#",
   "properties": {
     "answers-name": {},
-    "end-answer": {},
-    "grading-scheme": {
-      "enum": ["strict", "generous", "exact", "piecewise"]
-    },
     "index-variable": {},
     "integral": {
       "enum": ["true", "false"]
@@ -14,13 +10,12 @@
       "default": 3,
       "type": "integer"
     },
-    "start-answer": {},
-    "summand-answer": {},
     "weight": {
       "default": 1,
       "type": "integer"
     },
-    "variables": {}
+    "variables": {},
+    "correct-answer": {}
   },
   "required": ["answers-name", "index-variable"]
 }
