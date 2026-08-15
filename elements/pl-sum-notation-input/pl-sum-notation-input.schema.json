@@ -6,8 +6,13 @@
     "integral": {
       "enum": ["true", "false"]
     },
+    "grading-method": {
+      "default": "equivalent",
+      "enum": ["exact", "piecewise", "equivalent"]
+    },
     "summand-relative-weight": {
       "default": 3,
+      "minimum": 1,
       "type": "integer"
     },
     "weight": {

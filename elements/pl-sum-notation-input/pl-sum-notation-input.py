@@ -22,6 +22,8 @@ class ElementConfig:
     variables: tuple[str, ...]
     integral: bool
     weight: int
+    grading_method: str
+    summand_relative_weight: int
     correct_answer: str | None
 
     @property
@@ -60,12 +62,25 @@ def _config(element_html: str) -> ElementConfig:
     variables = tuple(
         value.strip() for value in variables_string.split(",") if value.strip()
     )
+    grading_method = pl.get_string_attrib(element, "grading-method", "equivalent")
+    if grading_method not in {"exact", "piecewise", "equivalent"}:
+        raise ValueError(
+            'Attribute "grading-method" must be one of "exact", "piecewise", '
+            'or "equivalent".'
+        )
+    summand_relative_weight = pl.get_integer_attrib(
+        element, "summand-relative-weight", 3
+    )
+    if summand_relative_weight is None or summand_relative_weight < 1:
+        raise ValueError('Attribute "summand-relative-weight" must be positive.')
     return ElementConfig(
         answers_name=answers_name,
         index_variable=index_variable,
         variables=variables,
         integral=bool(pl.get_boolean_attrib(element, "integral", False)),
         weight=int(pl.get_integer_attrib(element, "weight", 1) or 1),
+        grading_method=grading_method,
+        summand_relative_weight=summand_relative_weight,
         correct_answer=pl.get_string_attrib(element, "correct-answer", None),
     )
 
@@ -257,16 +272,11 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
     submitted[config.answers_name] = str(_combined_expression(config, start, end, body))
 
 
-def grade(element_html: str, data: dict[str, Any]) -> None:
-    """Small compatibility grader; richer grading is intentionally deferred."""
-    config = _config(element_html)
-    correct_components = _correct_components(config, data)
-    if correct_components is None:
-        return
-
+def _submitted_components(
+    config: ElementConfig, data: dict[str, Any]
+) -> tuple[sympy.Expr, sympy.Expr, sympy.Expr]:
     raw = data.get("raw_submitted_answers", {})
-    submitted = _combined_expression(
-        config,
+    return (
         _parse_expression(raw.get(config.start_name, ""), config.variables),
         _parse_expression(raw.get(config.end_name, ""), config.variables),
         _parse_expression(
@@ -274,26 +284,104 @@ def grade(element_html: str, data: dict[str, Any]) -> None:
             config.summand_variables,
         ),
     )
+
+
+def _definitely_zero(expression: sympy.Expr) -> bool:
+    simplified = sympy.simplify(sympy.expand(expression))
+    return simplified == 0 or simplified.equals(0) is True
+
+
+def _evaluates_equally(submitted: sympy.Expr, correct: sympy.Expr) -> bool:
+    try:
+        difference = cast(sympy.Expr, submitted.doit() - correct.doit())  # type: ignore
+        return _definitely_zero(difference)
+    except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def _affine_reindex_match(
+    config: ElementConfig,
+    submitted_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
+    correct_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
+) -> bool:
+    submitted_start, submitted_end, submitted_body = submitted_components
     correct_start, correct_end, correct_body = correct_components
-    correct = _combined_expression(config, correct_start, correct_end, correct_body)
-    shift = sympy.simplify(
-        _parse_expression(raw.get(config.start_name, ""), config.variables)
-        - correct_start  # type: ignore
-    )
-    submitted_end = _parse_expression(raw.get(config.end_name, ""), config.variables)
-    submitted_body = _parse_expression(
-        _despace_function_names(raw.get(config.summand_name, "")),
-        config.summand_variables,
-    )
+    if config.integral:
+        bounds_reversed = _definitely_zero(
+            cast(sympy.Expr, submitted_start - correct_end)  # type: ignore
+        ) and _definitely_zero(cast(sympy.Expr, submitted_end - correct_start))  # type: ignore
+        body_negated = _definitely_zero(cast(sympy.Expr, submitted_body + correct_body))  # type: ignore
+        if bounds_reversed and body_negated:
+            return True
+
     index = sympy.Symbol(config.index_variable)
-    translated_match = (
-        sympy.simplify(submitted_end - correct_end - shift) == 0  # type: ignore
-        and sympy.simplify(submitted_body.subs(index, index + shift) - correct_body)  # type: ignore
-        == 0
+    for coefficient in (sympy.Integer(1), sympy.Integer(-1)):
+        if config.integral or coefficient == 1:
+            offset = cast(sympy.Expr, correct_start - submitted_start)  # type: ignore
+            if coefficient == -1:
+                offset = cast(
+                    sympy.Expr,
+                    correct_start - coefficient * submitted_start,  # type: ignore
+                )
+            bounds_match = _definitely_zero(
+                cast(sympy.Expr, coefficient * submitted_end + offset - correct_end)  # type: ignore
+            )
+        else:
+            offset = cast(sympy.Expr, correct_end + submitted_start)  # type: ignore
+            bounds_match = _definitely_zero(
+                cast(sympy.Expr, coefficient * submitted_end + offset - correct_start)  # type: ignore
+            )
+        if not bounds_match:
+            continue  # type: ignore
+
+        transformed_body = correct_body.subs(index, coefficient * index + offset)  # type: ignore
+        if config.integral:
+            transformed_body *= coefficient
+        if _definitely_zero(cast(sympy.Expr, submitted_body - transformed_body)):  # type: ignore
+            return True
+    return False
+
+
+def _equivalent_score(
+    config: ElementConfig,
+    submitted_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
+    correct_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
+) -> float:
+    submitted = _combined_expression(config, *submitted_components)
+    correct = _combined_expression(config, *correct_components)
+    equivalent = (
+        submitted == correct
+        or _evaluates_equally(submitted, correct)
+        or _affine_reindex_match(config, submitted_components, correct_components)
     )
-    direct_match = submitted == correct or translated_match
-    value_match = sympy.simplify(submitted.doit() - correct.doit()) == 0  # type: ignore
-    score = 1.0 if direct_match else (0.5 if value_match else 0.0)
+    return 1.0 if equivalent else 0.0
+
+
+def grade(element_html: str, data: dict[str, Any]) -> None:
+    config = _config(element_html)
+    correct_components = _correct_components(config, data)
+    if correct_components is None:
+        return
+
+    submitted_components = _submitted_components(config, data)
+    if config.grading_method == "exact":
+        score = float(
+            _combined_expression(config, *submitted_components)
+            == _combined_expression(config, *correct_components)
+        )
+    elif config.grading_method == "piecewise":
+        component_weights = (1, 1, config.summand_relative_weight)
+        earned = sum(
+            weight
+            for submitted, correct, weight in zip(
+                submitted_components, correct_components, component_weights
+            )
+            if submitted == correct
+        )
+        score = earned / sum(component_weights)
+    else:
+        score = _equivalent_score(config, submitted_components, correct_components)
+
     data.setdefault("partial_scores", {})[config.answers_name] = {
         "score": score,
         "weight": config.weight,

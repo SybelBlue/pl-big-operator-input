@@ -465,10 +465,20 @@ def test_parse_despaces_formula_editor_trig_names_in_summand():
     assert data["submitted_answers"]["sigma1-summand"]["_value"] == "sin(k)"
 
 
-def _prepare_grade_data(mod, html: str, raw_submitted_answers: dict[str, str]):
+def _prepare_grade_data(
+    mod,
+    html: str,
+    raw_submitted_answers: dict[str, str],
+    *,
+    correct_answer: sympy.Expr | None = None,
+):
     data = {
         "params": {},
-        "correct_answers": {"sigma1": _sum_correct_answer()},
+        "correct_answers": {
+            "sigma1": correct_answer
+            if correct_answer is not None
+            else _sum_correct_answer()
+        },
         "panel": "question",
     }
     mod.prepare(html, data)
@@ -477,11 +487,15 @@ def _prepare_grade_data(mod, html: str, raw_submitted_answers: dict[str, str]):
     return data
 
 
-def test_grade_awards_full_credit_for_an_exact_match():
+@pytest.mark.parametrize("grading_method", [None, "exact", "piecewise", "equivalent"])
+def test_grade_awards_full_credit_for_an_exact_match(grading_method):
     mod = _load_module()
+    method_attribute = (
+        "" if grading_method is None else f' grading-method="{grading_method}"'
+    )
     html = (
         '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        f'variables="n"{method_attribute}></pl-sum-notation-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -498,11 +512,11 @@ def test_grade_awards_full_credit_for_an_exact_match():
     assert data["partial_scores"]["sigma1"]["score"] == 1.0
 
 
-def test_grade_awards_full_credit_for_a_translated_sum():
+def test_exact_grading_rejects_an_equivalent_but_different_sum():
     mod = _load_module()
     html = (
         '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        'variables="n" grading-method="exact"></pl-sum-notation-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -516,28 +530,158 @@ def test_grade_awards_full_credit_for_a_translated_sum():
 
     mod.grade(html, data)
 
-    assert data["partial_scores"]["sigma1"]["score"] == 1.0
+    assert data["partial_scores"]["sigma1"]["score"] == 0.0
 
 
-def test_grade_awards_partial_credit_for_numeric_equivalence():
+@pytest.mark.parametrize(
+    ("start", "end", "body", "expected_score"),
+    [
+        ("1", "4", "k^2", 1.0),
+        ("0", "4", "k^2", 4 / 5),
+        ("1", "5", "k^2", 4 / 5),
+        ("1", "4", "k", 2 / 5),
+        ("0", "5", "k^2", 3 / 5),
+        ("0", "4", "k", 1 / 5),
+        ("1", "5", "k", 1 / 5),
+        ("0", "5", "k", 0.0),
+    ],
+)
+def test_piecewise_grading_uses_component_weights(start, end, body, expected_score):
     mod = _load_module()
     html = (
         '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        'variables="n" grading-method="piecewise"></pl-sum-notation-input>'
     )
     data = _prepare_grade_data(
         mod,
         html,
         {
-            "sigma1-start": "1",
-            "sigma1-end": "5",
-            "sigma1-summand": "2*k",
+            "sigma1-start": start,
+            "sigma1-end": end,
+            "sigma1-summand": body,
         },
     )
 
     mod.grade(html, data)
 
-    assert data["partial_scores"]["sigma1"]["score"] == pytest.approx(0.5)
+    assert data["partial_scores"]["sigma1"]["score"] == pytest.approx(expected_score)
+
+
+def test_piecewise_grading_honors_custom_summand_relative_weight():
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        'grading-method="piecewise" summand-relative-weight="2"'
+        "></pl-sum-notation-input>"
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {"sigma1-start": "1", "sigma1-end": "4", "sigma1-summand": "k"},
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"] == {"score": 0.5, "weight": 1}
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "body"),
+    [
+        ("2", "5", "(k-1)^2"),
+        ("1", "4", "(5-k)^2"),
+        ("1", "5", "2*k"),
+    ],
+)
+def test_equivalent_grading_accepts_evaluation_and_affine_reindexing(start, end, body):
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-sum-notation-input>'
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {"sigma1-start": start, "sigma1-end": end, "sigma1-summand": body},
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"]["score"] == 1.0
+
+
+def test_equivalent_grading_accepts_expanded_summand():
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-sum-notation-input>'
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {"sigma1-start": "1", "sigma1-end": "4", "sigma1-summand": "k^2+2*k+1"},
+        correct_answer=_sum_correct_answer(body="(k + 1)**2"),
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"]["score"] == 1.0
+
+
+@pytest.mark.parametrize("body", ["-x^2", "-(1-x)^2"])
+def test_equivalent_grading_accepts_signed_integral_bound_reversal(body):
+    mod = _load_module()
+    x = sympy.Symbol("x")
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="x" '
+        'integral="true" grading-method="equivalent"></pl-sum-notation-input>'
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {"sigma1-start": "1", "sigma1-end": "0", "sigma1-summand": body},
+        correct_answer=sympy.Integral(x**2, (x, 0, 1)),  # type: ignore
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"]["score"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "body"),
+    [("1", "4", "k^2+1"), ("4", "1", "-k^2")],
+)
+def test_equivalent_grading_rejects_inequivalent_sums(start, end, body):
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-sum-notation-input>'
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {"sigma1-start": start, "sigma1-end": end, "sigma1-summand": body},
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"]["score"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    ['grading-method="other"', 'summand-relative-weight="0"'],
+)
+def test_prepare_rejects_invalid_grading_configuration(attribute):
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        f"{attribute}></pl-sum-notation-input>"
+    )
+
+    with pytest.raises(ValueError):
+        mod.prepare(html, {"correct_answers": {"sigma1": _sum_correct_answer()}})
 
 
 def test_prepare_rejects_missing_required_attributes():
