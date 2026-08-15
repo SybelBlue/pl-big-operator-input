@@ -1920,8 +1920,8 @@
     },
     // Custom Elements
     {
-      "name": "pl-example-element",
-      "schema": "elements/pl-example-element/pl-example-element.schema.json"
+      "name": "pl-sum-notation-input",
+      "schema": "elements/pl-sum-notation-input/pl-sum-notation-input.schema.json"
     }
   ]
 }
