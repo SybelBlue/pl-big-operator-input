@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 import typing
@@ -114,7 +115,7 @@ def test_math_field_dependencies_include_mathlive_and_initializer():
     assert "selection-change" in initializer
 
 
-def test_prepare_preserves_only_the_combined_correct_answer():
+def test_prepare_serializes_only_the_combined_correct_answer():
     mod = _load_module()
     correct = _sum_correct_answer()
     data = {
@@ -129,8 +130,10 @@ def test_prepare_preserves_only_the_combined_correct_answer():
     mod.prepare(html, data)
 
     assert data["params"] == {"existing": "unchanged"}
-    assert data["correct_answers"] == {"sigma1": correct}
-    assert data["correct_answers"]["sigma1"] is correct
+    assert list(data["correct_answers"]) == ["sigma1"]
+    assert data["correct_answers"]["sigma1"]["_type"] == "sympy"
+    assert data["correct_answers"]["sigma1"]["_value"] == str(correct)
+    json.dumps(data)
 
 
 @pytest.mark.parametrize(
@@ -152,7 +155,9 @@ def test_prepare_accepts_supported_sum_answer_formats(correct_answer):
 
     mod.prepare(html, data)
 
-    assert data["correct_answers"] == {"sigma1": correct_answer}
+    assert list(data["correct_answers"]) == ["sigma1"]
+    assert data["correct_answers"]["sigma1"]["_type"] == "sympy"
+    assert data["correct_answers"]["sigma1"]["_value"] == "Sum(k**2, (k, 1, 4))"
 
 
 @pytest.mark.parametrize(
@@ -176,7 +181,9 @@ def test_prepare_accepts_supported_integral_answer_formats(correct_answer):
 
     mod.prepare(html, data)
 
-    assert data["correct_answers"] == {"int1": correct_answer}
+    assert list(data["correct_answers"]) == ["int1"]
+    assert data["correct_answers"]["int1"]["_type"] == "sympy"
+    assert data["correct_answers"]["int1"]["_value"] == "Integral(x**2, (x, 0, 1))"
 
 
 @pytest.mark.parametrize(
@@ -202,8 +209,8 @@ def test_prepare_accepts_a_string_correct_answer_attribute(
 
     assert list(data["correct_answers"]) == ["sigma1"]
     correct = data["correct_answers"]["sigma1"]
-    assert isinstance(correct, (sympy.Sum, sympy.Integral))
-    assert str(correct.function) == expected_body
+    assert correct["_type"] == "sympy"
+    assert expected_body in correct["_value"]
 
 
 def test_prepare_rejects_a_non_sum_correct_answer_attribute():

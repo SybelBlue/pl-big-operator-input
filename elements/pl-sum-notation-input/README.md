@@ -18,11 +18,14 @@ server.py
 
 ```python
 import sympy
+import prairielearn.sympy_utils as psu
 
 
 def generate(data):
     k, x = sympy.symbols("k x")
-    data["correct_answers"]["sigma1"] = sympy.Sum(k**2 + x, (k, 1, 4))
+    data["correct_answers"]["sigma1"] = psu.sympy_to_json(
+        sympy.Sum(k**2 + x, (k, 1, 4))
+    )
 ```
 
 This renders a sigma-style input with separate fields for the lower limit, upper limit, and summand.
@@ -43,7 +46,9 @@ If `integral="true"`, the element switches to integral notation and appends the 
 ```python
 def generate(data):
     a, x = sympy.symbols("a x")
-    data["correct_answers"]["int1"] = sympy.Integral(x**2 + a, (x, 0, 1))
+    data["correct_answers"]["int1"] = psu.sympy_to_json(
+        sympy.Integral(x**2 + a, (x, 0, 1))
+    )
 ```
 
 ## Customizations
@@ -70,7 +75,7 @@ The correct answer may be assigned in `server.py` as a bounded, one-dimensional 
 
 When `index-variable` is a Greek LaTeX symbol name, the displayed notation is rendered from the normalized SymPy symbol so the label stays correct while the internal symbolic input still accepts the corresponding typed variable name without requiring the formula editor.
 
-The controller stores only the combined expression in `data["correct_answers"][answers-name]`. The namespaced field names such as `sigma1-start` are derived as needed and are not added to `correct_answers`.
+The controller stores only the combined expression in `data["correct_answers"][answers-name]`, normalized to a JSON-serializable PrairieLearn SymPy dictionary. The namespaced field names such as `sigma1-start` are derived as needed and are not added to `correct_answers`.
 
 During parsing, the nested child inputs are also written back to `data["submitted_answers"]` in PrairieLearn JSON form.
 

@@ -151,11 +151,9 @@ def prepare(element_html: str, data: dict[str, Any]) -> None:
         return
 
     start, end, body = correct_components
-    correct_answers = data["correct_answers"]
-    if config.correct_answer is not None:
-        correct_answers[config.answers_name] = _combined_expression(
-            config, start, end, body
-        )
+    data.setdefault("correct_answers", {})[config.answers_name] = psu.sympy_to_json(
+        _combined_expression(config, start, end, body)
+    )
 
 
 def _field(
