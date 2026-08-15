@@ -1,7 +1,7 @@
 {
   // This is required to load prettier extensions
   // https://github.com/prettier/prettier-vscode/issues/3235
-  "prettier.configPath": "./prettier.settings.json",
+  "prettier.configPath": ".prettierrc.json",
 
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
