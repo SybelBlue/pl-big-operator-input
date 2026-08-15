@@ -6,8 +6,7 @@ SHELL := /bin/bash
 UV_CACHE_DIR ?= /private/tmp/learnvia_uv_cache
 
 LIB_TEST_PATHS := \
-	elements/**/tests \
-	serverFilesCourse/**/tests
+	elements/**/tests
 
 CONTENT_TEST_PATHS := questions
 
