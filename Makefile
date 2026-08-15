@@ -5,10 +5,7 @@ SHELL := /bin/bash
 
 UV_CACHE_DIR ?= /private/tmp/learnvia_uv_cache
 
-LIB_TEST_PATHS := \
-	elements/**/tests
-
-CONTENT_TEST_PATHS := questions
+LIB_TEST_PATHS := elements/**/tests
 
 export UV_CACHE_DIR
 
@@ -16,7 +13,7 @@ DOCKER_JOBS_DIR ?= $(shell mktemp -d /tmp/pl-docker-jobs.XXXXXX)
 
 export DOCKER_JOBS_DIR
 
-.PHONY: clean deps venv test test-helpers test-content typecheck format-py format-json format-html format fetch-pl-schemas
+.PHONY: clean deps venv test typecheck format-py format-json format-html format check-format check-pl-schemas ci-dryrun fetch-pl-schemas dev docker
 
 # install deps, RUN ME FIRST
 # requires pnpm and uv to be installed on the commandline
@@ -31,20 +28,20 @@ fetch-pl-schemas:
 	uv run --active scripts/pull_down_prairielearn_schemas.py --write
 
 
-# Run tests
+# testing and validation
 test:
-	uv run --active pytest $(LIB_TEST_PATHS) $(CONTENT_TEST_PATHS) $(PYTEST_ARGS)
-
-test-helpers:
 	uv run --active pytest $(LIB_TEST_PATHS) $(PYTEST_ARGS)
 
-test-content:
-	uv run --active pytest $(CONTENT_TEST_PATHS) $(PYTEST_ARGS)
-
-
-# typecheck python
 typecheck:
 	uv run --active pyright .
+
+check-format:
+	uv run --active ruff format --check .
+
+check-pl-schemas:
+	uv run --active scripts/pull_down_prairielearn_schemas.py
+
+ci-dryrun: test typecheck check-format check-pl-schemas
 
 
 # format source
