@@ -98,6 +98,8 @@ def test_math_field_dependencies_include_mathlive_and_initializer():
     assert "window.PLSumNotationInput" in initializer
     assert "getValue('plain-text')" in initializer
     assert "getValue('latex')" in initializer
+    assert "mathVirtualKeyboard.layouts" in initializer
+    assert "selection-change" in initializer
 
 
 def test_prepare_populates_namespaced_answers():
