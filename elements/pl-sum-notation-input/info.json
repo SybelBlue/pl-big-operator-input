@@ -1,6 +1,12 @@
 {
   "controller": "pl-sum-notation-input.py",
   "dependencies": {
+    "nodeModulesScripts": [
+      "mathlive/mathlive.min.js"
+    ],
+    "elementScripts": [
+      "pl-sum-notation-input.js"
+    ],
     "elementStyles": [
       "pl-sum-notation-input.css"
     ]

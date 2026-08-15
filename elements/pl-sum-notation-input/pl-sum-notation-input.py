@@ -48,6 +48,12 @@ _GRADING_SCHEMES: Final[frozenset[GradingScheme]] = frozenset(
 )
 _INTERACTIVE_TEMPLATE_NAME: Final[str] = "pl-sum-notation-input.mustache"
 _TEX_TEMPLATE_NAME: Final[str] = "pl-sum-notation-input-submission.mustache"
+_PARTIAL_TEMPLATE_NAMES: Final[Mapping[str, str]] = FrozenDict(
+    {
+        "bounds-math-field": "partials/bounds-math-field.mustache",
+        "summand-math-field": "partials/summand-math-field.mustache",
+    }
+)
 
 
 def _split_variables(variables: str) -> tuple[str, ...]:
@@ -344,7 +350,7 @@ def _find_template_path(template_name: str | Path) -> Path:
     )
 
 
-def _render_question_template(config: Config) -> str:
+def _render_question_template(config: Config, *, editable: bool) -> str:
     render_params = {
         "latex_symbol": r"\int" if config.integral else r"\sum",
         "index_label": sympy.latex(sympy.Symbol(config.index_variable)),
@@ -354,7 +360,7 @@ def _render_question_template(config: Config) -> str:
             "answers_name": config.end_answers_name,
             "variables": config.variables,
             "correct_answer": config.end_answer,
-            "size": 6,
+            "size": 6 if config.integral else 4,
         },
         "lower_field": {
             "label": "starting index",
@@ -362,21 +368,31 @@ def _render_question_template(config: Config) -> str:
             "variables": config.variables,
             "correct_answer": config.start_answer,
             "size": 6,
+            "prefix": (
+                None
+                if config.integral
+                else rf"\({sympy.latex(sympy.Symbol(config.index_variable))} = \)"
+            ),
         },
         "summand_field": {
             "label": "summand",
             "answers_name": config.summand_answers_name,
             "variables": config.summand_variables,
             "correct_answer": config.summand_answer,
-            "size": 14,
+            "size": 20,
         },
         **({"integral": True} if config.integral else {}),
+        "editable": editable,
     }
 
     template = _find_template_path(_INTERACTIVE_TEMPLATE_NAME).read_text(
         encoding="utf-8"
     )
-    return chevron.render(template, render_params)
+    partials = {
+        name: _find_template_path(path).read_text(encoding="utf-8")
+        for name, path in _PARTIAL_TEMPLATE_NAMES.items()
+    }
+    return chevron.render(template, render_params, partials_dict=partials)
 
 
 def _render_tex_template(
@@ -418,7 +434,9 @@ def render(element_html: str, data: pl.QuestionData) -> str:
                 ),
             )
         case _:
-            return _render_question_template(config)
+            return _render_question_template(
+                config, editable=data.get("editable", True)
+            )
 
 
 def _raw_submitted_sum(config: Config, data: pl.QuestionData):

@@ -4,12 +4,7 @@
     "answers-name": {},
     "end-answer": {},
     "grading-scheme": {
-      "enum": [
-        "strict",
-        "generous",
-        "exact",
-        "piecewise"
-      ]
+      "enum": ["strict", "generous", "exact", "piecewise"]
     },
     "index-variable": {},
     "integral": {
@@ -27,11 +22,5 @@
     },
     "variables": {}
   },
-  "required": [
-    "answers-name",
-    "end-answer",
-    "index-variable",
-    "start-answer",
-    "summand-answer"
-  ]
+  "required": ["answers-name", "index-variable"]
 }

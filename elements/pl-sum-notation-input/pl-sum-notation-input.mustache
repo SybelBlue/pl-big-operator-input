@@ -13,33 +13,13 @@
         {{#lower_field}}
           <div class="pl-sum-notation-input__lower">
             <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
-            <pl-symbolic-input
-              display="inline"
-              size="{{ size }}"
-              answers-name="{{ answers_name }}"
-              variables="{{ variables }}"
-              correct-answer="{{ correct_answer }}"
-              {{^variables}}show-help-text="false"{{/variables}}
-              placeholder=""
-              allow-blank="false"
-              formula-editor="false"
-            ></pl-symbolic-input>
+            {{> bounds-math-field }}
           </div>
         {{/lower_field}}
         {{#upper_field}}
           <div class="pl-sum-notation-input__upper">
             <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
-            <pl-symbolic-input
-              display="inline"
-              size="{{ size }}"
-              answers-name="{{ answers_name }}"
-              variables="{{ variables }}"
-              correct-answer="{{ correct_answer }}"
-              {{^variables}}show-help-text="false"{{/variables}}
-              placeholder=""
-              allow-blank="false"
-              formula-editor="false"
-            ></pl-symbolic-input>
+            {{> bounds-math-field }}
           </div>
         {{/upper_field}}
       </div>
@@ -49,18 +29,7 @@
     <div class="pl-sum-notation-input__sigma-stack pl-sum-notation-input__sum">
       {{#lower_field}}
         <div class="pl-sum-notation-input__lower">
-          <pl-symbolic-input
-            display="inline"
-            size="{{ size }}"
-            answers-name="{{ answers_name }}"
-            label="\({{{ index_label }}} = \)"
-            variables="{{ variables }}"
-            {{#piecewise}}weight="1"{{/piecewise}}
-            {{^variables}}show-help-text="false"{{/variables}}
-            placeholder=""
-            allow-blank="false"
-            formula-editor="false"
-          ></pl-symbolic-input>
+          {{> bounds-math-field }}
         </div>
       {{/lower_field}}
       <div class="pl-sum-notation-input__sigma" aria-hidden="true">
@@ -68,17 +37,7 @@
       </div>
       {{#upper_field}}
         <div class="pl-sum-notation-input__upper">
-          <pl-symbolic-input
-            display="inline"
-            size="{{ size }}"
-            answers-name="{{ answers_name }}"
-            variables="{{ variables }}"
-            correct-answer="{{ correct_answer }}"
-            show-help-text="false"
-            placeholder=""
-            allow-blank="false"
-            formula-editor="false"
-          ></pl-symbolic-input>
+          {{> bounds-math-field }}
         </div>
       {{/upper_field}}
     </div>
@@ -86,17 +45,7 @@
   {{#summand_field}}
     <div class="pl-sum-notation-input__summand">
       <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
-      <pl-symbolic-input
-        display="inline"
-        formula-editor="true"
-        size="{{ size }}"
-        answers-name="{{ answers_name }}"
-        variables="{{ variables }}"
-        correct-answer="{{ correct_answer }}"
-        allow-blank="false"
-        allow-trig-functions="true"
-        placeholder=""
-      ></pl-symbolic-input>
+      {{> summand-math-field }}
     </div>
   {{/summand_field}}
   {{#integral}}

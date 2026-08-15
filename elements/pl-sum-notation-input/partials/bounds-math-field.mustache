@@ -1,0 +1,16 @@
+{{! htmlmustache-disable pl-prefer-pl-inputs }}
+<span class="input-group pl-sum-notation-input__math-field">
+  {{#prefix}}<span class="input-group-text">{{{ prefix }}}</span>{{/prefix}}
+  <input
+    name="{{ answers_name }}"
+    type="text"
+    autocomplete="off"
+    autocorrect="off"
+    class="form-control pl-sum-notation-input__math-field-input{{#parse_error}} has-validation is-invalid{{/parse_error}}"
+    {{#parse_error}}aria-invalid="true"{{/parse_error}}
+    {{^editable}}disabled{{/editable}}
+    size="{{ size }}"
+    {{#raw_submitted_answer}}value="{{ raw_submitted_answer }}"{{/raw_submitted_answer}}
+    {{#label}}aria-label="{{ label }}"{{/label}}
+  />
+</span>
