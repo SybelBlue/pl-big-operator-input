@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "template"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "chevron==0.14.0",
+  "lxml>=6.1.0",
+  "prairielearn",
+]
+
+[tool.uv.sources.prairielearn]
+git = "https://github.com/PrairieLearn/PrairieLearn.git"
+subdirectory = "apps/prairielearn/python"
+
+
+[dependency-groups]
+dev = ["ipython", "pyright", "pytest", "ruff"]

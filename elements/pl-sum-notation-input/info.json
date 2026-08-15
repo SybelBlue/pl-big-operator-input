@@ -1,0 +1,8 @@
+{
+  "controller": "pl-sum-notation-input.py",
+  "dependencies": {
+    "elementStyles": [
+      "pl-sum-notation-input.css"
+    ]
+  }
+}

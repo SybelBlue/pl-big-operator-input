@@ -1,0 +1,36 @@
+{
+  "name": "Temp 000",
+  "title": "Template Course",
+  "timezone": "America/Los_Angeles",
+  "assessmentModules": [
+    {
+      "name": "basics",
+      "heading": "Unit 1: Basic Arithmetic"
+    }
+  ],
+  "topics": [
+    {
+      "name": "Basic arithmetic",
+      "color": "blue3",
+      "description": "Foundational addition, subtraction, and multiplication questions."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Under Construction!",
+      "color": "red2",
+      "description": "There problem isn't finished yet! Don't use it!"
+    },
+    {
+      "name": "Manual Grading!",
+      "color": "red1",
+      "description": "Hand or AI grading is required."
+    },
+    {
+      "name": "Limited Randomness!",
+      "color": "orange3",
+      "description": "This question has fewer than five variants."
+    }
+  ],
+  "sharingSets": []
+}
