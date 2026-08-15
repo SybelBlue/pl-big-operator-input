@@ -146,15 +146,6 @@ def _correct_components(
 
 def prepare(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
-    data.setdefault("params", {}).update(
-        {
-            "index_variable": config.index_variable,
-            "start_answers_name": config.start_name,
-            "end_answers_name": config.end_name,
-            "summand_answers_name": config.summand_name,
-        }
-    )
-
     correct_components = _correct_components(config, data)
     if correct_components is None:
         return
@@ -165,9 +156,6 @@ def prepare(element_html: str, data: dict[str, Any]) -> None:
         correct_answers[config.answers_name] = _combined_expression(
             config, start, end, body
         )
-    correct_answers[config.start_name] = psu.sympy_to_json(start)
-    correct_answers[config.end_name] = psu.sympy_to_json(end)
-    correct_answers[config.summand_name] = psu.sympy_to_json(body)
 
 
 def _field(

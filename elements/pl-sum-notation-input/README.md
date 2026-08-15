@@ -70,7 +70,7 @@ The correct answer may be assigned in `server.py` as a bounded, one-dimensional 
 
 When `index-variable` is a Greek LaTeX symbol name, the displayed notation is rendered from the normalized SymPy symbol so the label stays correct while the internal symbolic input still accepts the corresponding typed variable name without requiring the formula editor.
 
-The controller leaves the combined expression in `data["correct_answers"][answers-name]` and creates individual namespaced answer slots such as `sigma1-start`.
+The controller stores only the combined expression in `data["correct_answers"][answers-name]`. The namespaced field names such as `sigma1-start` are derived as needed and are not added to `correct_answers`.
 
 During parsing, the nested child inputs are also written back to `data["submitted_answers"]` in PrairieLearn JSON form.
 

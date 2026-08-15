@@ -114,10 +114,13 @@ def test_math_field_dependencies_include_mathlive_and_initializer():
     assert "selection-change" in initializer
 
 
-def test_prepare_populates_namespaced_answers():
+def test_prepare_preserves_only_the_combined_correct_answer():
     mod = _load_module()
     correct = _sum_correct_answer()
-    data = {"params": {}, "correct_answers": {"sigma1": correct}}
+    data = {
+        "params": {"existing": "unchanged"},
+        "correct_answers": {"sigma1": correct},
+    }
     html = (
         '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
         'variables="k"></pl-sum-notation-input>'
@@ -125,14 +128,9 @@ def test_prepare_populates_namespaced_answers():
 
     mod.prepare(html, data)
 
-    assert data["params"]["index_variable"] == "k"
-    assert data["params"]["start_answers_name"] == "sigma1-start"
-    assert data["params"]["end_answers_name"] == "sigma1-end"
-    assert data["params"]["summand_answers_name"] == "sigma1-summand"
+    assert data["params"] == {"existing": "unchanged"}
+    assert data["correct_answers"] == {"sigma1": correct}
     assert data["correct_answers"]["sigma1"] is correct
-    assert data["correct_answers"]["sigma1-start"]["_value"] == "1"
-    assert data["correct_answers"]["sigma1-end"]["_value"] == "4"
-    assert data["correct_answers"]["sigma1-summand"]["_value"] == "k**2"
 
 
 @pytest.mark.parametrize(
@@ -154,9 +152,7 @@ def test_prepare_accepts_supported_sum_answer_formats(correct_answer):
 
     mod.prepare(html, data)
 
-    assert data["correct_answers"]["sigma1-start"]["_value"] == "1"
-    assert data["correct_answers"]["sigma1-end"]["_value"] == "4"
-    assert data["correct_answers"]["sigma1-summand"]["_value"] == "k**2"
+    assert data["correct_answers"] == {"sigma1": correct_answer}
 
 
 @pytest.mark.parametrize(
@@ -180,9 +176,7 @@ def test_prepare_accepts_supported_integral_answer_formats(correct_answer):
 
     mod.prepare(html, data)
 
-    assert data["correct_answers"]["int1-start"]["_value"] == "0"
-    assert data["correct_answers"]["int1-end"]["_value"] == "1"
-    assert data["correct_answers"]["int1-summand"]["_value"] == "x**2"
+    assert data["correct_answers"] == {"int1": correct_answer}
 
 
 @pytest.mark.parametrize(
@@ -206,9 +200,10 @@ def test_prepare_accepts_a_string_correct_answer_attribute(
 
     mod.prepare(html, data)
 
-    assert data["correct_answers"]["sigma1-start"]["_value"] == "1"
-    assert data["correct_answers"]["sigma1-end"]["_value"] == "4"
-    assert data["correct_answers"]["sigma1-summand"]["_value"] == expected_body
+    assert list(data["correct_answers"]) == ["sigma1"]
+    correct = data["correct_answers"]["sigma1"]
+    assert isinstance(correct, (sympy.Sum, sympy.Integral))
+    assert str(correct.function) == expected_body
 
 
 def test_prepare_rejects_a_non_sum_correct_answer_attribute():
@@ -279,7 +274,6 @@ def test_render_supports_greek_latex_index_variables():
     rendered = mod.render(html, data)
 
     assert r"\(\theta = \)" in rendered
-    assert data["params"]["index_variable"] == "theta"
 
 
 def test_render_does_not_require_correct_answers():
