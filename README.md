@@ -1,8 +1,14 @@
-# PrairieLearn Course Template
+# pl-sum-notation-input
 
-A starter repository for building and testing a PrairieLearn course. It includes a sample course instance, assessment, question, custom element, shared Python helper library, and development tooling.
+This directory is a course demo of a new element.
 
-## Prerequisites
+To include the element in your course, use:
+
+```sh
+$ git submodule add -b release https://github.com/SybelBlue/pl-sum-notation-input.git elements/pl-sum-notation-input
+```
+
+## Developer Prerequisites
 
 Install the following tools before getting started:
 
@@ -12,7 +18,7 @@ Install the following tools before getting started:
 - [GNU Make](https://www.gnu.org/software/make/)
 - [Docker](https://www.docker.com/) (optional, for running PrairieLearn in a container)
 
-## Quickstart
+## Developer Quickstart
 
 Clone the repository, enter its directory, and install the project dependencies:
 
