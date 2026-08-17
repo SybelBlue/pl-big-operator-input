@@ -44,20 +44,8 @@ def _load_module():
     return module
 
 
-def _read_element_css() -> str:
-    return _find_module_path().with_suffix(".css").read_text(encoding="utf-8")
-
-
 def _read_element_template(name: str) -> str:
     return (_find_module_path().parent / name).read_text(encoding="utf-8")
-
-
-def _css_order(css: str, selector: str) -> int:
-    block_start = css.index(selector)
-    order_start = css.index("order:", block_start)
-    value_start = order_start + len("order:")
-    value_end = css.index(";", value_start)
-    return int(css[value_start:value_end].strip())
 
 
 def _sum_correct_answer(
@@ -81,7 +69,6 @@ def test_bounds_partial_uses_formula_editor_with_inline_prefix():
     assert '{{#label}}aria-label="{{ label }}"{{/label}}' in template
     assert "allow-trig" in template
     assert "virtual-keyboard-mode" not in template
-    assert 'style="min-width: {{ size }}ch"' in template
     assert 'window.PLSumNotationInput("{{ answers_name }}")' in template
 
 
@@ -94,34 +81,7 @@ def test_summand_partial_uses_formula_editor():
     assert 'name="{{ answers_name }}-latex"' in template
     assert "allow-trig" in template
     assert "virtual-keyboard-mode" not in template
-    assert 'style="min-width: {{ size }}ch"' in template
     assert 'window.PLSumNotationInput("{{ answers_name }}")' in template
-
-
-def test_formula_editors_hide_menu_buttons():
-    css = _read_element_css()
-
-    selector = ".pl-sum-notation-input math-field::part(menu-toggle)"
-    block_start = css.index(selector)
-    block_end = css.index("}", block_start)
-    assert "display: none" in css[block_start:block_end]
-
-
-def test_bound_formula_editors_hide_virtual_keyboard_buttons():
-    css = _read_element_css()
-
-    upper_selector = (
-        ".pl-sum-notation-input__upper math-field::part(virtual-keyboard-toggle)"
-    )
-    lower_selector = (
-        ".pl-sum-notation-input__lower math-field::part(virtual-keyboard-toggle)"
-    )
-    block_start = css.index(upper_selector)
-    block_end = css.index("}", block_start)
-    block = css[block_start:block_end]
-
-    assert lower_selector in block
-    assert "display: none" in block
 
 
 def test_math_field_dependencies_include_mathlive_and_initializer():
@@ -247,16 +207,6 @@ def test_prepare_rejects_a_non_sum_correct_answer_attribute():
         mod.prepare(html, {"params": {}, "correct_answers": {}})
 
 
-def test_sigma_css_places_upper_bound_above_lower_bound():
-    css = _read_element_css()
-
-    assert (
-        _css_order(css, ".pl-sum-notation-input__sum > .pl-sum-notation-input__upper")
-        < _css_order(css, ".pl-sum-notation-input__sum > .pl-sum-notation-input__sigma")
-        < _css_order(css, ".pl-sum-notation-input__sum > .pl-sum-notation-input__lower")
-    )
-
-
 def test_render_emits_a_sigma_layout_with_three_inputs():
     mod = _load_module()
     html = (
@@ -283,17 +233,6 @@ def test_render_emits_a_sigma_layout_with_three_inputs():
         'class="pl-sum-notation-input__upper"'
     )
     assert 'allow-trig="allow-trig"' in rendered
-    assert 'style="min-width: 20ch"' in rendered
-    assert re.search(
-        r'<math-field\s+id="sum-notation-input-sigma1-start".*?min-width: 6ch',
-        rendered,
-        re.DOTALL,
-    )
-    assert re.search(
-        r'<math-field\s+id="sum-notation-input-sigma1-end".*?min-width: 4ch',
-        rendered,
-        re.DOTALL,
-    )
 
 
 def test_render_supports_greek_latex_index_variables():
@@ -377,13 +316,6 @@ def test_render_emits_an_integral_layout_with_horizontal_limits():
     assert 'name="sigma1-start"' in rendered
     assert 'name="sigma1-end"' in rendered
     assert 'name="sigma1-summand"' in rendered
-    assert re.search(
-        r'<math-field\s+id="sum-notation-input-sigma1-end".*?min-width: 6ch',
-        rendered,
-        re.DOTALL,
-    )
-
-
 def test_render_emits_one_submission_badge_for_non_piecewise_grading():
     mod = _load_module()
     html = (

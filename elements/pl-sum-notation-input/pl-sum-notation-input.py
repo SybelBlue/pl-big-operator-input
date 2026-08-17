@@ -178,6 +178,7 @@ def _field(
     data: dict[str, Any],
     *,
     prefix: str | None = None,
+    centered: bool = False,
 ) -> dict[str, Any]:
     raw_answers = data.get("raw_submitted_answers", {})
     return {
@@ -185,6 +186,7 @@ def _field(
         "label": label,
         "size": size,
         "prefix": prefix,
+        "centered": centered,
         "editable": data.get("panel", "question") == "question",
         "raw_submitted_answer": raw_answers.get(answers_name, ""),
         "raw_submitted_answer_latex": raw_answers.get(f"{answers_name}-latex", ""),
@@ -204,7 +206,11 @@ def _render_question(config: ElementConfig, data: dict[str, Any]) -> str:
             config.start_name, "Lower bound", 6, data, prefix=lower_prefix
         ),
         "upper_field": _field(
-            config.end_name, "Upper bound", 6 if config.integral else 4, data
+            config.end_name,
+            "Upper bound",
+            6 if config.integral else 8,
+            data,
+            centered=not config.integral,
         ),
         "summand_field": _field(config.summand_name, "Summand", 20, data),
     }
