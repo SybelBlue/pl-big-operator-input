@@ -6,6 +6,10 @@
     "integral": {
       "enum": ["true", "false"]
     },
+    "allow-blank": {
+      "default": "false",
+      "enum": ["true", "false"]
+    },
     "grading-method": {
       "default": "equivalent",
       "enum": ["exact", "piecewise", "equivalent"]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import sys
 import typing
 from pathlib import Path
@@ -316,6 +315,8 @@ def test_render_emits_an_integral_layout_with_horizontal_limits():
     assert 'name="sigma1-start"' in rendered
     assert 'name="sigma1-end"' in rendered
     assert 'name="sigma1-summand"' in rendered
+
+
 def test_render_emits_one_submission_badge_for_non_piecewise_grading():
     mod = _load_module()
     html = (
@@ -361,6 +362,45 @@ def test_parse_builds_the_submitted_sympy_sum():
     mod.parse(html, data)
 
     assert data["submitted_answers"]["sigma1"] == "Sum(k**2, (k, 1, 4))"
+
+
+@pytest.mark.parametrize(
+    ("allow_blank_attribute", "expects_format_error"),
+    [("", True), (' allow-blank="true"', False)],
+    ids=["blank-disallowed", "blank-allowed"],
+)
+def test_allow_blank_if_and_only_if_prevents_a_blank_format_error(
+    allow_blank_attribute, expects_format_error
+):
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" index-variable="k"'
+        f"{allow_blank_attribute}></pl-sum-notation-input>"
+    )
+    data = {
+        "raw_submitted_answers": {
+            "sigma1-start": "",
+            "sigma1-end": "  ",
+            "sigma1-summand": "",
+        },
+        "submitted_answers": {},
+        "format_errors": {},
+    }
+
+    mod.parse(html, data)
+
+    assert ("sigma1" in data["format_errors"]) is expects_format_error
+    assert data["submitted_answers"]["sigma1"] == (None if expects_format_error else "")
+
+
+def test_schema_declares_allow_blank_as_a_boolean_attribute():
+    schema_path = _find_module_path().with_suffix(".schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["properties"]["allow-blank"] == {
+        "default": "false",
+        "enum": ["true", "false"],
+    }
 
 
 def test_parse_stores_child_answers_as_pl_json():
@@ -472,6 +512,54 @@ def test_grade_awards_full_credit_for_an_exact_match(grading_method):
             "sigma1-end": "4",
             "sigma1-summand": "k^2",
         },
+    )
+
+    mod.grade(html, data)
+
+    assert data["partial_scores"]["sigma1"]["score"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("integral_attribute", "index_variable", "start", "body", "correct_answer"),
+    [
+        (
+            "",
+            "k",
+            "1",
+            "1 / k^2",
+            sympy.Sum(1 / sympy.Symbol("k") ** 2, (sympy.Symbol("k"), 1, sympy.oo)),  # type: ignore
+        ),
+        (
+            ' integral="true"',
+            "x",
+            "0",
+            "e^(-x)",
+            sympy.Integral(
+                sympy.exp(-sympy.Symbol("x")),
+                (sympy.Symbol("x"), 0, sympy.oo),
+            ),
+        ),
+    ],
+    ids=["infinite-sum", "improper-integral"],
+)
+def test_grade_accepts_an_infinite_upper_bound(
+    integral_attribute, index_variable, start, body, correct_answer
+):
+    mod = _load_module()
+    html = (
+        '<pl-sum-notation-input answers-name="sigma1" '
+        f'index-variable="{index_variable}"{integral_attribute}'
+        "></pl-sum-notation-input>"
+    )
+    data = _prepare_grade_data(
+        mod,
+        html,
+        {
+            "sigma1-start": start,
+            "sigma1-end": "infinity",
+            "sigma1-summand": body,
+        },
+        correct_answer=correct_answer,
     )
 
     mod.grade(html, data)

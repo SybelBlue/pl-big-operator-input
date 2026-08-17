@@ -14,6 +14,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="default-inline"
+      allow-blank="true"
       index-variable="i"
       correct-answer="Sum(i**2, (i, 1, 6))"
     ></pl-sum-notation-input>
@@ -29,6 +30,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="exact-server-sum"
+      allow-blank="true"
       index-variable="k"
       variables="n, a, b"
       integral="false"
@@ -46,6 +48,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="piecewise-sum"
+      allow-blank="true"
       index-variable="j"
       variables="m, c"
       grading-method="piecewise"
@@ -68,6 +71,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="equivalent-sum"
+      allow-blank="true"
       index-variable="r"
       grading-method="equivalent"
       correct-answer="Sum(r - 1, (r, 2, 8))"
@@ -84,6 +88,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="default-integral"
+      allow-blank="true"
       index-variable="x"
       integral="true"
       correct-answer="Integral(x**3, (x, 0, 2))"
@@ -100,6 +105,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="exact-server-integral"
+      allow-blank="true"
       index-variable="t"
       variables="a, b, c"
       integral="true"
@@ -117,6 +123,7 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="piecewise-integral"
+      allow-blank="true"
       index-variable="y"
       variables="L"
       integral="true"
@@ -140,10 +147,44 @@
   <div class="col-md-6">
     <pl-sum-notation-input
       answers-name="greek-integral"
+      allow-blank="true"
       index-variable="theta"
       integral="true"
       weight="3"
       correct-answer="Integral(sin(theta), (theta, 0, pi))"
+    ></pl-sum-notation-input>
+  </div>
+</div>
+
+<hr />
+<h3>9. Infinite sum</h3>
+<div class="row align-items-center">
+  <div class="col-md-6">
+    <p>\[\displaystyle \sum_{k=1}^{\infty} \frac{1}{k^2}\]</p>
+  </div>
+  <div class="col-md-6">
+    <pl-sum-notation-input
+      answers-name="infinite-sum"
+      allow-blank="true"
+      index-variable="k"
+      correct-answer="Sum(1 / k**2, (k, 1, oo))"
+    ></pl-sum-notation-input>
+  </div>
+</div>
+
+<hr />
+<h3>10. Improper integral</h3>
+<div class="row align-items-center">
+  <div class="col-md-6">
+    <p>\[\displaystyle \int_0^{\infty} e^{-x}\,dx\]</p>
+  </div>
+  <div class="col-md-6">
+    <pl-sum-notation-input
+      answers-name="infinite-integral"
+      allow-blank="true"
+      index-variable="x"
+      integral="true"
+      correct-answer="Integral(exp(-x), (x, 0, oo))"
     ></pl-sum-notation-input>
   </div>
 </div>

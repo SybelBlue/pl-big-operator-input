@@ -21,6 +21,7 @@ class ElementConfig:
     index_variable: str
     variables: tuple[str, ...]
     integral: bool
+    allow_blank: bool
     weight: int
     grading_method: str
     summand_relative_weight: int
@@ -78,6 +79,7 @@ def _config(element_html: str) -> ElementConfig:
         index_variable=index_variable,
         variables=variables,
         integral=bool(pl.get_boolean_attrib(element, "integral", False)),
+        allow_blank=bool(pl.get_boolean_attrib(element, "allow-blank", False)),
         weight=int(pl.get_integer_attrib(element, "weight", 1) or 1),
         grading_method=grading_method,
         summand_relative_weight=summand_relative_weight,
@@ -86,6 +88,9 @@ def _config(element_html: str) -> ElementConfig:
 
 
 def _parse_expression(source: str, variables: tuple[str, ...]) -> sympy.Expr:
+    # MathLive's plain-text serializer emits ``infinity``, while PrairieLearn's
+    # SymPy parser exposes infinity under the name ``infty``.
+    source = re.sub(r"\binfinity\b", "infty", source)
     return psu.convert_string_to_sympy(
         source,
         variables,
@@ -113,7 +118,10 @@ def _normalize_correct_answer(value: Any) -> Any:
         return value
 
     try:
-        return sympy.sympify(source)
+        return sympy.sympify(
+            source,
+            locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I},
+        )  # type: ignore[call-overload]
     except (sympy.SympifyError, TypeError) as exc:
         raise ValueError("The correct answer is not a valid SymPy expression.") from exc
 
@@ -262,10 +270,28 @@ def _despace_function_names(source: str) -> str:
     return source
 
 
+def _submission_is_blank(config: ElementConfig, data: dict[str, Any]) -> bool:
+    raw = data.get("raw_submitted_answers", {})
+    return all(
+        not str(raw.get(name, "")).strip()
+        for name in (config.start_name, config.end_name, config.summand_name)
+    )
+
+
 def parse(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
-    raw = data.get("raw_submitted_answers", {})
     submitted = data.setdefault("submitted_answers", {})
+    if _submission_is_blank(config, data):
+        if config.allow_blank:
+            submitted[config.answers_name] = ""
+        else:
+            data.setdefault("format_errors", {})[config.answers_name] = (
+                "No submitted answer."
+            )
+            submitted[config.answers_name] = None
+        return
+
+    raw = data.get("raw_submitted_answers", {})
     start = _parse_expression(raw.get(config.start_name, ""), config.variables)
     end = _parse_expression(raw.get(config.end_name, ""), config.variables)
     body = _parse_expression(
@@ -367,6 +393,13 @@ def grade(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
     correct_components = _correct_components(config, data)
     if correct_components is None:
+        return
+
+    if config.allow_blank and _submission_is_blank(config, data):
+        data.setdefault("partial_scores", {})[config.answers_name] = {
+            "score": 0.0,
+            "weight": config.weight,
+        }
         return
 
     submitted_components = _submitted_components(config, data)
