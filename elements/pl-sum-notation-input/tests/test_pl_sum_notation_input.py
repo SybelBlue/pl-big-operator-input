@@ -70,14 +70,19 @@ def _sum_correct_answer(
     return typing.cast(sympy.Sum, sympy.Sum(sympy.sympify(body), (index, start, end)))
 
 
-def test_bounds_partial_uses_a_plain_input_without_formula_editor():
+def test_bounds_partial_uses_formula_editor_with_inline_prefix():
     template = _read_element_template("partials/bounds-math-field.mustache")
 
     assert "<pl-symbolic-input" not in template
-    assert "<math-field" not in template
-    assert 'type="text"' in template
+    assert "<math-field" in template
     assert 'name="{{ answers_name }}"' in template
-    assert "PLSumNotationInput" not in template
+    assert 'name="{{ answers_name }}-latex"' in template
+    assert '<span class="input-group-text">{{{ prefix }}}</span>' in template
+    assert '{{#label}}aria-label="{{ label }}"{{/label}}' in template
+    assert "allow-trig" in template
+    assert "virtual-keyboard-mode" not in template
+    assert 'style="min-width: {{ size }}ch"' in template
+    assert 'window.PLSumNotationInput("{{ answers_name }}")' in template
 
 
 def test_summand_partial_uses_formula_editor():
@@ -88,17 +93,35 @@ def test_summand_partial_uses_formula_editor():
     assert 'name="{{ answers_name }}"' in template
     assert 'name="{{ answers_name }}-latex"' in template
     assert "allow-trig" in template
+    assert "virtual-keyboard-mode" not in template
     assert 'style="min-width: {{ size }}ch"' in template
     assert 'window.PLSumNotationInput("{{ answers_name }}")' in template
 
 
-def test_summand_formula_editor_hides_menu_button():
+def test_formula_editors_hide_menu_buttons():
     css = _read_element_css()
 
-    selector = ".pl-sum-notation-input__summand math-field::part(menu-toggle)"
+    selector = ".pl-sum-notation-input math-field::part(menu-toggle)"
     block_start = css.index(selector)
     block_end = css.index("}", block_start)
     assert "display: none" in css[block_start:block_end]
+
+
+def test_bound_formula_editors_hide_virtual_keyboard_buttons():
+    css = _read_element_css()
+
+    upper_selector = (
+        ".pl-sum-notation-input__upper math-field::part(virtual-keyboard-toggle)"
+    )
+    lower_selector = (
+        ".pl-sum-notation-input__lower math-field::part(virtual-keyboard-toggle)"
+    )
+    block_start = css.index(upper_selector)
+    block_end = css.index("}", block_start)
+    block = css[block_start:block_end]
+
+    assert lower_selector in block
+    assert "display: none" in block
 
 
 def test_math_field_dependencies_include_mathlive_and_initializer():
@@ -250,8 +273,8 @@ def test_render_emits_a_sigma_layout_with_three_inputs():
     rendered = mod.render(html, data)
 
     assert "∑" in rendered or r"\sum" in rendered
-    assert rendered.count("<math-field") == 1
-    assert rendered.count('type="text"') == 2
+    assert rendered.count("<math-field") == 3
+    assert rendered.count('type="text"') == 0
     assert 'name="sigma1-start"' in rendered
     assert 'name="sigma1-end"' in rendered
     assert 'name="sigma1-summand"' in rendered
@@ -261,8 +284,16 @@ def test_render_emits_a_sigma_layout_with_three_inputs():
     )
     assert 'allow-trig="allow-trig"' in rendered
     assert 'style="min-width: 20ch"' in rendered
-    assert re.search(r'<input\s+name="sigma1-start".*?size="6"', rendered, re.DOTALL)
-    assert re.search(r'<input\s+name="sigma1-end".*?size="4"', rendered, re.DOTALL)
+    assert re.search(
+        r'<math-field\s+id="sum-notation-input-sigma1-start".*?min-width: 6ch',
+        rendered,
+        re.DOTALL,
+    )
+    assert re.search(
+        r'<math-field\s+id="sum-notation-input-sigma1-end".*?min-width: 4ch',
+        rendered,
+        re.DOTALL,
+    )
 
 
 def test_render_supports_greek_latex_index_variables():
@@ -341,12 +372,16 @@ def test_render_emits_an_integral_layout_with_horizontal_limits():
     assert rendered.index('class="pl-sum-notation-input__lower"') < rendered.index(
         'class="pl-sum-notation-input__upper"'
     )
-    assert rendered.count("<math-field") == 1
-    assert rendered.count('type="text"') == 2
+    assert rendered.count("<math-field") == 3
+    assert rendered.count('type="text"') == 0
     assert 'name="sigma1-start"' in rendered
     assert 'name="sigma1-end"' in rendered
     assert 'name="sigma1-summand"' in rendered
-    assert re.search(r'<input\s+name="sigma1-end".*?size="6"', rendered, re.DOTALL)
+    assert re.search(
+        r'<math-field\s+id="sum-notation-input-sigma1-end".*?min-width: 6ch',
+        rendered,
+        re.DOTALL,
+    )
 
 
 def test_render_emits_one_submission_badge_for_non_piecewise_grading():
