@@ -298,8 +298,11 @@ def _question(config: Config, data: dict[str, Any]) -> str:
         "integral": config.operator == "integral",
         "operator_latex": OPS[config.operator][0],
         "index_label": index,
-        "body_field": _field(config, "body", "Operator body", 20, data),
+        "body_field": _field(config, "body", "Operator body", 16, data),
     }
+    partial_score = data.get("partial_scores", {}).get(config.answer)
+    if partial_score is not None:
+        context["score_badge"] = _score_badge(float(partial_score.get("score", 0)))
     if config.limits == "bounds":
         context["lower_field"] = _field(
             config,
@@ -377,6 +380,14 @@ def _submitted_tex(config: Config, data: dict[str, Any]) -> str:
     return _tex(config, data)
 
 
+def _score_badge(score: float) -> dict[str, Any]:
+    if score >= 1:
+        return {"correct": True}
+    if score <= 0:
+        return {"incorrect": True}
+    return {"partial": round(score * 100)}
+
+
 def render(element_html: str, data: dict[str, Any]) -> str:
     config = _config(element_html)
     panel = data.get("panel", "question")
@@ -386,17 +397,19 @@ def render(element_html: str, data: dict[str, Any]) -> str:
         return chevron.render(
             (HERE / "pl-big-operator-input-submission.mustache").read_text(),
             {"tex": _correct_tex(config, data)},
+            partials_path=str(HERE / "partials"),
+            partials_ext="mustache",
         )
     score = float(data.get("partial_scores", {}).get(config.answer, {}).get("score", 0))
-    context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
-    if score >= 1:
-        context["correct"] = True
-    elif score <= 0:
-        context["incorrect"] = True
-    else:
-        context["partial"] = round(score * 100)
+    context: dict[str, Any] = {
+        "tex": _submitted_tex(config, data),
+        **_score_badge(score),
+    }
     return chevron.render(
-        (HERE / "pl-big-operator-input-submission.mustache").read_text(), context
+        (HERE / "pl-big-operator-input-submission.mustache").read_text(),
+        context,
+        partials_path=str(HERE / "partials"),
+        partials_ext="mustache",
     )
 
 
