@@ -1,10 +1,47 @@
 {
   "$schema": "http://json-schema.org/draft-06/schema#",
   "properties": {
-    "answers-name": {},
-    "index-variable": {},
-    "integral": {
-      "enum": ["true", "false"]
+    "answers-name": {
+      "type": "string"
+    },
+    "operator": {
+      "default": "sum",
+      "enum": [
+        "sum",
+        "product",
+        "integral",
+        "limit",
+        "union",
+        "intersection",
+        "disjoint-union",
+        "and",
+        "or",
+        "min",
+        "max"
+      ]
+    },
+    "limits": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "bounds",
+        "domain",
+        "approach"
+      ]
+    },
+    "index-variable": {
+      "type": "string"
+    },
+    "variables": {
+      "type": "string"
+    },
+    "limit-direction": {
+      "default": "two-sided",
+      "enum": [
+        "two-sided",
+        "from-left",
+        "from-right"
+      ]
     },
     "allow-blank": {
       "default": "false",
@@ -12,9 +49,13 @@
     },
     "grading-method": {
       "default": "equivalent",
-      "enum": ["exact", "piecewise", "equivalent"]
+      "enum": [
+        "exact",
+        "component",
+        "equivalent"
+      ]
     },
-    "summand-relative-weight": {
+    "body-relative-weight": {
       "default": 3,
       "minimum": 1,
       "type": "integer"
@@ -23,8 +64,10 @@
       "default": 1,
       "type": "integer"
     },
-    "variables": {},
     "correct-answer": {}
   },
-  "required": ["answers-name", "index-variable"]
+  "required": [
+    "answers-name",
+    "index-variable"
+  ]
 }
