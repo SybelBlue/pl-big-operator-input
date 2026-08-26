@@ -60,6 +60,7 @@ def test_auto_limits(operator, limits):
     [
         "sum",
         "product",
+        "integral",
         "union",
         "intersection",
         "disjoint-union",
@@ -77,7 +78,6 @@ def test_flexible_operator_limit_forms(operator, limits):
 @pytest.mark.parametrize(
     "operator,limits",
     [
-        ("integral", "domain"),
         ("integral", "approach"),
         ("limit", "bounds"),
         ("limit", "domain"),
@@ -276,6 +276,46 @@ def test_integral_bounds_use_a_column_between_operator_and_body():
     assert "flex-direction: column" in css
     assert ".pl-big-operator-input__limits > .pl-big-operator-input__upper" in css
     assert ".pl-big-operator-input__limits > .pl-big-operator-input__lower" in css
+
+
+def test_domain_integral_renders_only_a_subscript_field_between_operator_and_body():
+    markup = html(operator="integral", limits="domain")
+    rendered = mod.render(markup, data())
+    operator_position = rendered.index('pl-big-operator-input__operator"')
+    domain_position = rendered.index('name="op-domain"')
+    body_position = rendered.index('name="op-body"')
+    assert operator_position < domain_position < body_position
+    assert 'name="op-start"' not in rendered
+    assert 'name="op-end"' not in rendered
+    assert "Integration domain" in rendered
+    assert r"\mathrm d k" in rendered
+    assert rendered.index("pl-big-operator-input__domain-spacer") < domain_position
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    assert ".pl-big-operator-input__domain-spacer" in css
+    assert "height: calc(1.5rem + 0.75rem + 2px)" in css
+
+
+def test_domain_integral_parses_and_reconstructs_notation():
+    markup = html(
+        operator="integral",
+        limits="domain",
+        **{"index-variable": "z", "variables": "Gamma", "grading-method": "exact"},
+    )
+    state = data(raw={"op-domain": "Gamma", "op-body": "z"}, panel="submission")
+    state["partial_scores"] = {"op": {"score": 1}}
+    mod.parse(markup, state)
+    assert state["submitted_answers"]["op"]["limits"] == "domain"
+    assert set(state["submitted_answers"]["op"]) == {
+        "_type",
+        "_version",
+        "operator",
+        "limits",
+        "index",
+        "domain",
+        "body",
+    }
+    rendered = mod.render(markup, state)
+    assert r"\int_{Gamma} z\,\mathrm{d}z" in rendered
 
 
 @pytest.mark.parametrize("operator", ["union", "limit"])
