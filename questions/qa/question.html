@@ -1,21 +1,73 @@
 <pl-question-panel>
     <h2><code>pl-big-operator-input</code> examples</h2>
 </pl-question-panel>
-<p>Bounded sum:</p>
-<pl-big-operator-input answers-name="sum" operator="sum" index-variable="k"></pl-big-operator-input>
-<p>Bounded product:</p>
-<pl-big-operator-input answers-name="product" operator="product" index-variable="k"></pl-big-operator-input>
-<p>Integral:</p>
-<pl-big-operator-input answers-name="integral" operator="integral" index-variable="x"></pl-big-operator-input>
-<p>Domain integral:</p>
-<pl-big-operator-input
-    answers-name="contour"
-    operator="integral"
-    limits="domain"
-    index-variable="z"
-    variables="Gamma"
-    grading-method="exact"
-></pl-big-operator-input>
+<div class="row">
+    <div class="col-md-6">
+        <p>Bounded sum:</p>
+        <pl-big-operator-input answers-name="sum" operator="sum" index-variable="k"></pl-big-operator-input>
+    </div>
+    <div class="col-md-6">
+        <p>Bounded product:</p>
+        <pl-big-operator-input answers-name="product" operator="product" index-variable="k"></pl-big-operator-input>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <p>Range integral:</p>
+        <pl-big-operator-input answers-name="integral" operator="integral" index-variable="x"></pl-big-operator-input>
+    </div>
+    <div class="col-md-6">
+        <p>Domain integral:</p>
+        <pl-big-operator-input
+            answers-name="contour"
+            operator="integral"
+            limits="domain"
+            index-variable="z"
+            variables="Gamma"
+            grading-method="exact"
+        ></pl-big-operator-input>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <p>Minimum:</p>
+        <pl-big-operator-input answers-name="min" operator="min" index-variable="x"></pl-big-operator-input>
+    </div>
+    <div class="col-md-6">
+        <p>Maximum:</p>
+        <pl-big-operator-input answers-name="max" operator="max" index-variable="x"></pl-big-operator-input>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <p>Domain-indexed union:</p>
+        <pl-big-operator-input
+            answers-name="union"
+            operator="union"
+            index-variable="k"
+            grading-method="exact"
+        ></pl-big-operator-input>
+    </div>
+    <div class="col-md-6">
+        <p>Domain-indexed intersection:</p>
+        <pl-big-operator-input
+            answers-name="intersection"
+            operator="intersection"
+            index-variable="k"
+            grading-method="exact"
+        ></pl-big-operator-input>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6">
+        <p>Domain-indexed conjunction:</p>
+        <pl-big-operator-input answers-name="and" operator="and" index-variable="k" grading-method="exact"></pl-big-operator-input>
+    </div>
+    <div class="col-md-6">
+        <p>Domain-indexed disjunction:</p>
+        <pl-big-operator-input answers-name="or" operator="or" index-variable="k" grading-method="exact"></pl-big-operator-input>
+    </div>
+</div>
 <p>Right-hand limit:</p>
 <pl-big-operator-input
     answers-name="limit"
@@ -23,16 +75,3 @@
     index-variable="x"
     limit-direction="from-right"
 ></pl-big-operator-input>
-<p>Suprema:</p>
-<pl-big-operator-input answers-name="max" operator="max" index-variable="x"></pl-big-operator-input>
-<br />
-<pl-big-operator-input answers-name="min" operator="min" index-variable="x"></pl-big-operator-input>
-<p>Domain-indexed union:</p>
-<pl-big-operator-input
-    answers-name="union"
-    operator="union"
-    index-variable="k"
-    grading-method="exact"
-></pl-big-operator-input>
-<p>Domain-indexed conjunction:</p>
-<pl-big-operator-input answers-name="and" operator="and" index-variable="k" grading-method="exact"></pl-big-operator-input>

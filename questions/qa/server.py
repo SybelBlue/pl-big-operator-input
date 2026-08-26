@@ -28,6 +28,10 @@ def generate(data):
             "contour": structured("integral", z, gamma, z),
             "limit": psu.sympy_to_json(sympy.Limit(sympy.sin(x) / x, x, 0, dir="+")),
             "union": structured("union", k, sympy.FiniteSet(1, 2), sympy.FiniteSet(k)),
+            "intersection": structured(
+                "intersection", k, sympy.FiniteSet(1, 2), sympy.FiniteSet(k)
+            ),
             "and": structured("and", k, sympy.FiniteSet(1, 2), k > 0),
+            "or": structured("or", k, sympy.FiniteSet(1, 2), k > 0),
         }
     )

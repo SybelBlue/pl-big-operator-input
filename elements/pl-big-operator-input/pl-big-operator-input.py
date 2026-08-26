@@ -391,6 +391,13 @@ def _parse(source: str, variables: tuple[str, ...]) -> sympy.Basic:
     )
 
 
+def _requires_set(config: Config, component: Component) -> bool:
+    return component == "domain" or (
+        component == "body"
+        and config.operator in {"union", "intersection", "disjoint-union"}
+    )
+
+
 def _blank(config: Config, data: dict[str, Any]) -> bool:
     raw = data.get("raw_submitted_answers", {})
     return all(not str(raw.get(config.name(c), "")).strip() for c in config.components)
@@ -410,8 +417,11 @@ def _parse_values(
             else config.variables
         )
         try:
-            result[component] = _parse(str(raw.get(name, "")), variables)
-            submitted[name] = _json(result[component])
+            value = _parse(str(raw.get(name, "")), variables)
+            if _requires_set(config, component) and not isinstance(value, sympy.Set):
+                raise ValueError("This field must be a set.")
+            result[component] = value
+            submitted[name] = _json(value)
         except Exception as exc:  # noqa: BLE001 -- PrairieLearn exposes several parser exception types.
             data.setdefault("format_errors", {})[name] = str(exc)
     return result if len(result) == len(config.components) else None
