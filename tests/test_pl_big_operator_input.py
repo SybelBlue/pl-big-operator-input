@@ -303,23 +303,20 @@ def test_partially_blank_submission_has_a_descriptive_field_error():
     assert ">0</span>" not in rendered
 
 
-def test_body_math_field_is_the_last_input_group_child_when_invalid():
-    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "1"})
-    markup = html(operator="union")
+def test_wholly_blank_required_submission_marks_every_field_invalid():
+    state = data(raw={"op-start": "", "op-end": "", "op-body": ""})
+    markup = html()
+
     mod.parse(markup, state)
 
-    document = mod.lxml.html.fragment_fromstring(mod.render(markup, state))
-    body_group = document.xpath(
-        './/div[contains(concat(" ", normalize-space(@class), " "), '
-        '" pl-big-operator-input__body ")]/span['
-        'contains(concat(" ", normalize-space(@class), " "), '
-        '" pl-big-operator-input__math-field ")]'
-    )[0]
-    assert body_group[-1].tag == "math-field"
-    assert body_group[-2].classes == {"invalid-feedback", "d-block"}
-    css = (HERE / "pl-big-operator-input.css").read_text()
-    assert "border-top-left-radius: var(--bs-border-radius) !important" in css
-    assert "border-bottom-left-radius: var(--bs-border-radius) !important" in css
+    assert state["submitted_answers"]["op"] is None
+    assert state["format_errors"] == {
+        "op-start": "No submitted answer.",
+        "op-end": "No submitted answer.",
+        "op-body": "No submitted answer.",
+    }
+    rendered = mod.render(markup, state)
+    assert rendered.count(">No submitted answer.</span>") == 3
 
 
 def test_initial_latex_is_stored_outside_math_fields():
@@ -387,6 +384,20 @@ def test_allow_blank_and_independent_parse_errors():
         "op-end" in broken["format_errors"]
         and broken["submitted_answers"]["op"] is None
     )
+
+
+def test_allow_blank_submission_is_gradable_as_incorrect():
+    k = sympy.Symbol("k")
+    state = data(sympy.Sum(k**2, (k, 1, 4)))
+    markup = html(**{"allow-blank": "true"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert "format_errors" not in state
+    assert state["submitted_answers"]["op"] == ""
+    assert state["partial_scores"]["op"] == {"score": 0.0, "weight": 1}
 
 
 def test_integral_and_submission_reconstruct_complete_notation():
