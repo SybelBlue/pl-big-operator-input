@@ -361,9 +361,20 @@ def _correct_tex(config: Config, data: dict[str, Any]) -> str:
     structured = _correct(config, data)
     if structured is None:
         return ""
+    return _structured_tex(config, structured)
+
+
+def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
     values = _values(config, structured)
     raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
     return _tex(config, {"raw_submitted_answers": raw})
+
+
+def _submitted_tex(config: Config, data: dict[str, Any]) -> str:
+    structured = data.get("submitted_answers", {}).get(config.answer)
+    if isinstance(structured, dict):
+        return _structured_tex(config, structured)
+    return _tex(config, data)
 
 
 def render(element_html: str, data: dict[str, Any]) -> str:
@@ -377,7 +388,7 @@ def render(element_html: str, data: dict[str, Any]) -> str:
             {"tex": _correct_tex(config, data)},
         )
     score = float(data.get("partial_scores", {}).get(config.answer, {}).get("score", 0))
-    context: dict[str, Any] = {"tex": _tex(config, data)}
+    context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
     if score >= 1:
         context["correct"] = True
     elif score <= 0:
