@@ -33,5 +33,7 @@ def generate(data):
             ),
             "and": structured("and", k, sympy.FiniteSet(1, 2), k > 0),
             "or": structured("or", k, sympy.FiniteSet(1, 2), k > 0),
+            "min": structured("min", x, sympy.FiniteSet(1, 2), x**2),
+            "max": structured("max", x, sympy.FiniteSet(1, 2), x**2),
         }
     )

@@ -272,6 +272,7 @@ def _field(
     raw = data.get("raw_submitted_answers", {})
     return {
         "answers_name": name,
+        "error_id": f"big-operator-input-error-{name}",
         "label": label,
         "size": size,
         "prefix": prefix,
@@ -417,7 +418,10 @@ def _parse_values(
             else config.variables
         )
         try:
-            value = _parse(str(raw.get(name, "")), variables)
+            source = str(raw.get(name, ""))
+            if not source.strip():
+                raise ValueError("No submitted answer.")
+            value = _parse(source, variables)
             if _requires_set(config, component) and not isinstance(value, sympy.Set):
                 raise ValueError("This field must be a set.")
             result[component] = value

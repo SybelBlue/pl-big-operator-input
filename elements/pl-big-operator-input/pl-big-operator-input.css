@@ -136,6 +136,11 @@
   align-items: center;
 }
 
+.pl-big-operator-input__body math-field {
+  border-radius: var(--bs-border-radius) !important;
+}
+
+
 .pl-big-operator-input__differential {
   font-size: 1.5rem;
 }
