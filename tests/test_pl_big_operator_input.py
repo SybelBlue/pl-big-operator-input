@@ -400,6 +400,17 @@ def test_integral_and_submission_reconstruct_complete_notation():
     assert rendered.count("badge") == 1
 
 
+def test_set_submission_renders_literal_braces():
+    markup = html(operator="union")
+    state = data(raw={"op-domain": "{1, 2}", "op-body": "{k}"})
+    mod.parse(markup, state)
+    state["panel"] = "submission"
+
+    rendered = mod.render(markup, state)
+
+    assert r"\bigcup_{k\in \left\{1, 2\right\}} \left\{k\right\}" in rendered
+
+
 def test_integral_bounds_use_a_column_between_operator_and_body():
     rendered = mod.render(html(operator="integral"), data())
     assert "pl-big-operator-input__operator-stack--integral" in rendered
@@ -454,7 +465,7 @@ def test_domain_integral_parses_and_reconstructs_notation():
         "body",
     }
     rendered = mod.render(markup, state)
-    assert r"\int_{Interval(0, 1)} z\,\mathrm{d}z" in rendered
+    assert r"\int_{\left[0, 1\right]} z\,\mathrm{d}z" in rendered
 
 
 @pytest.mark.parametrize("operator", ["union", "limit"])
