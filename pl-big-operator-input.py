@@ -10,418 +10,472 @@ import lxml.html
 import prairielearn as pl  # type: ignore
 import prairielearn.sympy_utils as psu  # type: ignore
 import sympy
+import sympy.sets
 
-_ELEMENT_DIR = Path(__file__).parent
-_TRIG_NAMES = ("sin", "cos", "tan", "sec", "csc", "cot")
+HERE = Path(__file__).parent
+OPS = {
+    "sum": (r"\sum", "bounds"),
+    "product": (r"\prod", "bounds"),
+    "integral": (r"\int", "bounds"),
+    "limit": (r"\lim", "approach"),
+    "union": (r"\bigcup", "domain"),
+    "intersection": (r"\bigcap", "domain"),
+    "disjoint-union": (r"\bigsqcup", "domain"),
+    "and": (r"\bigwedge", "domain"),
+    "or": (r"\bigvee", "domain"),
+    "min": (r"\min", "domain"),
+    "max": (r"\max", "domain"),
+}
+FLEXIBLE = {
+    "sum",
+    "product",
+    "union",
+    "intersection",
+    "disjoint-union",
+    "and",
+    "or",
+    "min",
+    "max",
+}
+DIRECTIONS = {"two-sided": "+-", "from-left": "-", "from-right": "+"}
 
 
 @dataclass(frozen=True)
-class ElementConfig:
-    answers_name: str
-    index_variable: str
+class Config:
+    answer: str
+    operator: str
+    limits: str
+    index: str
     variables: tuple[str, ...]
-    integral: bool
+    direction: str
     allow_blank: bool
+    grading: str
+    body_weight: int
     weight: int
-    grading_method: str
-    summand_relative_weight: int
-    correct_answer: str | None
+    correct_attribute: str | None
 
     @property
-    def start_name(self) -> str:
-        return f"{self.answers_name}-start"
+    def components(self) -> tuple[str, ...]:
+        return {
+            "bounds": ("lower", "upper", "body"),
+            "domain": ("domain", "body"),
+            "approach": ("target", "body"),
+        }[self.limits]
 
-    @property
-    def end_name(self) -> str:
-        return f"{self.answers_name}-end"
-
-    @property
-    def summand_name(self) -> str:
-        return f"{self.answers_name}-summand"
-
-    @property
-    def summand_variables(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys((*self.variables, self.index_variable)))
+    def name(self, component: str) -> str:
+        return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
 
 
-def _element(element_html: str):
-    return lxml.html.fragment_fromstring(element_html)
-
-
-def _required_string(element: Any, name: str) -> str:
-    value = pl.get_string_attrib(element, name, None)
-    if value is None or not value.strip():
-        raise ValueError(f'Required attribute "{name}" missing')
-    return value.strip()
-
-
-def _config(element_html: str) -> ElementConfig:
-    element = _element(element_html)
-    answers_name = _required_string(element, "answers-name")
-    index_variable = _required_string(element, "index-variable")
-    variables_string = pl.get_string_attrib(element, "variables", "") or ""
-    variables = tuple(
-        value.strip() for value in variables_string.split(",") if value.strip()
-    )
-    grading_method = pl.get_string_attrib(element, "grading-method", "equivalent")
-    if grading_method not in {"exact", "piecewise", "equivalent"}:
+def _config(html: str) -> Config:
+    element = lxml.html.fragment_fromstring(html)
+    required = {}
+    for name in ("answers-name", "index-variable"):
+        value = pl.get_string_attrib(element, name, None)
+        if value is None or not value.strip():
+            raise ValueError(f'Required attribute "{name}" missing')
+        required[name] = value.strip()
+    operator = pl.get_string_attrib(element, "operator", "sum") or "sum"
+    if operator not in OPS:
+        raise ValueError(f'Unknown operator "{operator}".')
+    limits = pl.get_string_attrib(element, "limits", "auto") or "auto"
+    limits = OPS[operator][1] if limits == "auto" else limits
+    allowed = {"bounds", "domain"} if operator in FLEXIBLE else {OPS[operator][1]}
+    if limits not in allowed:
         raise ValueError(
-            'Attribute "grading-method" must be one of "exact", "piecewise", '
-            'or "equivalent".'
+            f'Operator "{operator}" does not support limits="{limits}"; use {", ".join(sorted(allowed))}.'
         )
-    summand_relative_weight = pl.get_integer_attrib(
-        element, "summand-relative-weight", 3
+    grading = (
+        pl.get_string_attrib(element, "grading-method", "equivalent") or "equivalent"
     )
-    if summand_relative_weight is None or summand_relative_weight < 1:
-        raise ValueError('Attribute "summand-relative-weight" must be positive.')
-    return ElementConfig(
-        answers_name=answers_name,
-        index_variable=index_variable,
-        variables=variables,
-        integral=bool(pl.get_boolean_attrib(element, "integral", False)),
-        allow_blank=bool(pl.get_boolean_attrib(element, "allow-blank", False)),
-        weight=int(pl.get_integer_attrib(element, "weight", 1) or 1),
-        grading_method=grading_method,
-        summand_relative_weight=summand_relative_weight,
-        correct_answer=pl.get_string_attrib(element, "correct-answer", None),
+    if grading not in {"exact", "component", "equivalent"}:
+        raise ValueError(
+            'Attribute "grading-method" must be exact, component, or equivalent.'
+        )
+    body_weight = pl.get_integer_attrib(element, "body-relative-weight", 3)
+    if body_weight is None or body_weight < 1:
+        raise ValueError('Attribute "body-relative-weight" must be positive.')
+    direction = (
+        pl.get_string_attrib(element, "limit-direction", "two-sided") or "two-sided"
+    )
+    if direction not in DIRECTIONS:
+        raise ValueError(f'Unknown limit-direction "{direction}".')
+    variables = pl.get_string_attrib(element, "variables", "") or ""
+    return Config(
+        required["answers-name"],
+        operator,
+        limits,
+        required["index-variable"],
+        tuple(x.strip() for x in variables.split(",") if x.strip()),
+        direction,
+        bool(pl.get_boolean_attrib(element, "allow-blank", False)),
+        grading,
+        body_weight,
+        int(pl.get_integer_attrib(element, "weight", 1) or 1),
+        pl.get_string_attrib(element, "correct-answer", None),
     )
 
 
-def _parse_expression(source: str, variables: tuple[str, ...]) -> sympy.Expr:
-    # MathLive's plain-text serializer emits ``infinity``, while PrairieLearn's
-    # SymPy parser exposes infinity under the name ``infty``.
-    source = re.sub(r"\binfinity\b", "infty", source)
-    return psu.convert_string_to_sympy(
-        source,
-        variables,
-        allow_hidden=True,
-        allow_trig_functions=True,
-    )
-
-
-def _combined_expression(
-    config: ElementConfig, start: sympy.Expr, end: sympy.Expr, body: sympy.Expr
-) -> sympy.Expr:
-    index = sympy.Symbol(config.index_variable)
-    constructor = sympy.Integral if config.integral else sympy.Sum
-    return cast(sympy.Expr, constructor(body, (index, start, end)))
-
-
-def _normalize_correct_answer(value: Any) -> Any:
-    source: str | None = None
+def _decode(value: Any) -> Any:
+    if isinstance(value, dict) and value.get("_type") == "sympy" and "_value" in value:
+        return psu.json_to_sympy(cast(Any, value), allow_sets=True)
     if isinstance(value, str):
-        source = value
-    elif psu.is_sympy_json(value):
-        source = value["_value"]
-
-    if source is None:
-        return value
-
-    try:
-        return sympy.sympify(
-            source,
-            locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I},
-        )  # type: ignore[call-overload]
-    except (sympy.SympifyError, TypeError) as exc:
-        raise ValueError("The correct answer is not a valid SymPy expression.") from exc
+        try:
+            return sympy.sympify(  # type: ignore[call-overload]
+                value, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
+            )
+        except (sympy.SympifyError, TypeError) as exc:
+            raise ValueError("The correct answer contains invalid SymPy data.") from exc
+    return value
 
 
-def _correct_components(
-    config: ElementConfig, data: dict[str, Any]
-) -> tuple[sympy.Expr, sympy.Expr, sympy.Expr] | None:
-    correct_answers = data.get("correct_answers", {})
-    if config.correct_answer is not None:
-        raw_correct = config.correct_answer
-    elif config.answers_name in correct_answers:
-        raw_correct = correct_answers[config.answers_name]
-    else:
+def _json(value: sympy.Basic) -> dict[str, Any]:
+    return cast(dict[str, Any], psu.sympy_to_json(cast(Any, value), allow_sets=True))
+
+
+def _canonical(config: Config, values: dict[str, sympy.Basic]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "_type": "operator_expression",
+        "_version": 1,
+        "operator": config.operator,
+        "limits": config.limits,
+        "index": _json(sympy.Symbol(config.index)),
+    }
+    result.update({key: _json(values[key]) for key in config.components})
+    if config.limits == "approach":
+        result["direction"] = config.direction
+    return result
+
+
+def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
+    keys = {"_type", "_version", "operator", "limits", "index", *config.components}
+    if config.limits == "approach":
+        keys.add("direction")
+    if (
+        set(value) != keys
+        or value.get("_type") != "operator_expression"
+        or value.get("_version") != 1
+    ):
+        raise ValueError(
+            "Correct answer is not a well-formed version 1 operator expression."
+        )
+    if value["operator"] != config.operator or value["limits"] != config.limits:
+        raise ValueError(
+            "Correct answer operator or limits form does not match the element."
+        )
+    if config.limits == "approach" and value["direction"] != config.direction:
+        raise ValueError("Correct answer direction does not match limit-direction.")
+    if _decode(value["index"]) != sympy.Symbol(config.index):
+        raise ValueError("Correct answer index does not match index-variable.")
+    values = {key: _decode(value[key]) for key in config.components}
+    if not all(isinstance(item, sympy.Basic) for item in values.values()):
+        raise ValueError(
+            "Every mathematical component must be PrairieLearn SymPy JSON."
+        )
+    return _canonical(config, cast(dict[str, sympy.Basic], values))
+
+
+def _binder(config: Config, value: Any) -> dict[str, Any] | None:
+    expected = {
+        "sum": sympy.Sum,
+        "product": sympy.Product,
+        "integral": sympy.Integral,
+        "limit": sympy.Limit,
+    }.get(config.operator)
+    if expected is None or not isinstance(value, expected):
         return None
+    index = sympy.Symbol(config.index)
+    if config.operator == "limit":
+        body, variable, target, direction = value.args
+        if variable != index:
+            raise ValueError("Correct answer index does not match index-variable.")
+        public = {v: k for k, v in DIRECTIONS.items()}.get(str(direction))
+        if public != config.direction:
+            raise ValueError(
+                "Correct answer Limit direction does not match limit-direction."
+            )
+        return _canonical(config, {"target": target, "body": body})
+    if len(value.limits) != 1 or len(value.limits[0]) != 3:
+        raise ValueError("Correct answer must have exactly one bounded index.")
+    variable, lower, upper = value.limits[0]
+    if variable != index:
+        raise ValueError("Correct answer index does not match index-variable.")
+    return _canonical(config, {"lower": lower, "upper": upper, "body": value.function})
 
-    correct = _normalize_correct_answer(raw_correct)
-    expected_type = sympy.Integral if config.integral else sympy.Sum
-    if not isinstance(correct, expected_type):
-        expected_name = "Integral" if config.integral else "Sum"
-        raise TypeError(
-            f'Correct answer "{config.answers_name}" must be a SymPy {expected_name}.'
-        )
-    if len(correct.limits) != 1:
-        raise ValueError(
-            f'Correct answer "{config.answers_name}" must have exactly one bounded index.'
-        )
 
-    limit = cast(tuple[Any, ...], correct.limits[0])
-    if len(limit) != 3:
-        raise ValueError(
-            f'Correct answer "{config.answers_name}" must have exactly one bounded index.'
-        )
-    index, start, end = limit
-    if index != sympy.Symbol(config.index_variable):
-        raise ValueError(
-            f'Correct answer "{config.answers_name}" uses index "{index}", '
-            f'but index-variable is "{config.index_variable}".'
-        )
-    return (
-        cast(sympy.Expr, start),
-        cast(sympy.Expr, end),
-        cast(sympy.Expr, correct.function),
+def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
+    raw = (
+        config.correct_attribute
+        if config.correct_attribute is not None
+        else data.get("correct_answers", {}).get(config.answer)
+    )
+    if raw is None:
+        return None
+    if isinstance(raw, dict) and raw.get("_type") == "operator_expression":
+        return _structured(config, raw)
+    value = _decode(raw)
+    converted = _binder(config, value)
+    if converted is not None:
+        return converted
+    raise TypeError(
+        f'Correct answer "{config.answer}" must be a matching binder-aware object or canonical structured dictionary.'
     )
 
 
 def prepare(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
-    correct_components = _correct_components(config, data)
-    if correct_components is None:
-        return
-
-    start, end, body = correct_components
-    data.setdefault("correct_answers", {})[config.answers_name] = psu.sympy_to_json(
-        _combined_expression(config, start, end, body)
-    )
+    correct = _correct(config, data)
+    if correct is not None:
+        data.setdefault("correct_answers", {})[config.answer] = correct
 
 
 def _field(
-    answers_name: str,
+    config: Config,
+    component: str,
     label: str,
     size: int,
     data: dict[str, Any],
-    *,
     prefix: str | None = None,
-    centered: bool = False,
 ) -> dict[str, Any]:
-    raw_answers = data.get("raw_submitted_answers", {})
+    name = config.name(component)
+    raw = data.get("raw_submitted_answers", {})
     return {
-        "answers_name": answers_name,
+        "answers_name": name,
         "label": label,
         "size": size,
         "prefix": prefix,
-        "centered": centered,
         "editable": data.get("panel", "question") == "question",
-        "raw_submitted_answer": raw_answers.get(answers_name, ""),
-        "raw_submitted_answer_latex": raw_answers.get(f"{answers_name}-latex", ""),
-        "parse_error": data.get("format_errors", {}).get(answers_name),
+        "raw_submitted_answer": raw.get(name, ""),
+        "raw_submitted_answer_latex": raw.get(f"{name}-latex", ""),
+        "parse_error": data.get("format_errors", {}).get(name),
         "custom_functions": "",
     }
 
 
-def _render_question(config: ElementConfig, data: dict[str, Any]) -> str:
-    index_label = sympy.latex(sympy.Symbol(config.index_variable))
-    lower_prefix = None if config.integral else rf"\({index_label} = \)"
-    context = {
-        "integral": config.integral,
-        "latex_symbol": r"\int" if config.integral else r"\sum",
-        "index_label": index_label,
-        "lower_field": _field(
-            config.start_name, "Lower bound", 6, data, prefix=lower_prefix
-        ),
-        "upper_field": _field(
-            config.end_name,
-            "Upper bound",
-            6 if config.integral else 8,
-            data,
-            centered=not config.integral,
-        ),
-        "summand_field": _field(config.summand_name, "Summand", 20, data),
+def _question(config: Config, data: dict[str, Any]) -> str:
+    index = sympy.latex(sympy.Symbol(config.index))
+    context: dict[str, Any] = {
+        config.limits: True,
+        "integral": config.operator == "integral",
+        "operator_latex": OPS[config.operator][0],
+        "index_label": index,
+        "direction_latex": {"two-sided": "", "from-left": "^-", "from-right": "^+"}[
+            config.direction
+        ],
+        "body_field": _field(config, "body", "Operator body", 20, data),
     }
-    template = (_ELEMENT_DIR / "pl-sum-notation-input.mustache").read_text()
+    if config.limits == "bounds":
+        context["lower_field"] = _field(
+            config,
+            "lower",
+            "Lower bound",
+            7,
+            data,
+            None if config.operator == "integral" else rf"\({index} = \)",
+        )
+        context["upper_field"] = _field(config, "upper", "Upper bound", 7, data)
+    elif config.limits == "domain":
+        context["annotation_field"] = _field(
+            config, "domain", "Index domain", 10, data, rf"\({index} \in \)"
+        )
+    else:
+        context["annotation_field"] = _field(
+            config, "target", "Approach target", 10, data, rf"\({index} \to \)"
+        )
     return chevron.render(
-        template,
+        (HERE / "pl-big-operator-input.mustache").read_text(),
         context,
-        partials_path=str(_ELEMENT_DIR / "partials"),
+        partials_path=str(HERE / "partials"),
         partials_ext="mustache",
     )
 
 
-def _submission_tex(config: ElementConfig, data: dict[str, Any]) -> str:
+def _tex(config: Config, data: dict[str, Any]) -> str:
     raw = data.get("raw_submitted_answers", {})
-    start = raw.get(config.start_name, "?")
-    end = raw.get(config.end_name, "?")
-    body = raw.get(config.summand_name, "?")
-    index = sympy.latex(sympy.Symbol(config.index_variable))
-    if config.integral:
-        return rf"\int_{{{start}}}^{{{end}}} {body}\,\mathrm{{d}}{index}"
-    return rf"\sum_{{{index}={start}}}^{{{end}}} {body}"
+    get = lambda c: raw.get(config.name(c), "?")
+    index = sympy.latex(sympy.Symbol(config.index))
+    op = OPS[config.operator][0]
+    if config.limits == "bounds":
+        if config.operator == "integral":
+            return rf"{op}_{{{get('lower')}}}^{{{get('upper')}}} {get('body')}\,\mathrm{{d}}{index}"
+        return rf"{op}_{{{index}={get('lower')}}}^{{{get('upper')}}} {get('body')}"
+    if config.limits == "domain":
+        return rf"{op}_{{{index}\in {get('domain')}}} {get('body')}"
+    direction = {"two-sided": "", "from-left": "^-", "from-right": "^+"}[
+        config.direction
+    ]
+    return rf"{op}_{{{index}\to {get('target')}{direction}}} {get('body')}"
 
 
-def _render_submission(config: ElementConfig, data: dict[str, Any]) -> str:
-    score = float(
-        data.get("partial_scores", {}).get(config.answers_name, {}).get("score", 0)
-    )
-    context: dict[str, Any] = {"tex": _submission_tex(config, data)}
+def _correct_tex(config: Config, data: dict[str, Any]) -> str:
+    structured = _correct(config, data)
+    if structured is None:
+        return "?"
+    values = _values(config, structured)
+    raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
+    return _tex(config, {"raw_submitted_answers": raw})
+
+
+def render(element_html: str, data: dict[str, Any]) -> str:
+    config = _config(element_html)
+    panel = data.get("panel", "question")
+    if panel == "question":
+        return _question(config, data)
+    if panel == "answer":
+        return chevron.render(
+            (HERE / "pl-big-operator-input-submission.mustache").read_text(),
+            {"tex": _correct_tex(config, data), "correct": True},
+        )
+    score = float(data.get("partial_scores", {}).get(config.answer, {}).get("score", 0))
+    context: dict[str, Any] = {"tex": _tex(config, data)}
     if score >= 1:
         context["correct"] = True
     elif score <= 0:
         context["incorrect"] = True
     else:
-        context["partial"] = round(100 * score)
-    template = (_ELEMENT_DIR / "pl-sum-notation-input-submission.mustache").read_text()
-    return chevron.render(template, context)
-
-
-def render(element_html: str, data: dict[str, Any]) -> str:
-    config = _config(element_html)
-    if data.get("panel", "question") == "submission":
-        return _render_submission(config, data)
-    return _render_question(config, data)
-
-
-def _despace_function_names(source: str) -> str:
-    for name in _TRIG_NAMES:
-        source = re.sub(rf"\b{' *'.join(name)}\b", name, source)
-    return source
-
-
-def _submission_is_blank(config: ElementConfig, data: dict[str, Any]) -> bool:
-    raw = data.get("raw_submitted_answers", {})
-    return all(
-        not str(raw.get(name, "")).strip()
-        for name in (config.start_name, config.end_name, config.summand_name)
+        context["partial"] = round(score * 100)
+    return chevron.render(
+        (HERE / "pl-big-operator-input-submission.mustache").read_text(), context
     )
+
+
+def _parse(source: str, variables: tuple[str, ...]) -> sympy.Basic:
+    source = re.sub(r"\binfinity\b", "infty", source)
+    for name in ("sin", "cos", "tan", "sec", "csc", "cot"):
+        source = re.sub(rf"\b{' *'.join(name)}\b", name, source)
+    return psu.convert_string_to_sympy(
+        source, variables, allow_hidden=True, allow_sets=True, allow_trig_functions=True
+    )
+
+
+def _blank(config: Config, data: dict[str, Any]) -> bool:
+    raw = data.get("raw_submitted_answers", {})
+    return all(not str(raw.get(config.name(c), "")).strip() for c in config.components)
+
+
+def _parse_values(
+    config: Config, data: dict[str, Any]
+) -> dict[str, sympy.Basic] | None:
+    raw = data.get("raw_submitted_answers", {})
+    submitted = data.setdefault("submitted_answers", {})
+    result = {}
+    for component in config.components:
+        name = config.name(component)
+        variables = (
+            tuple(dict.fromkeys((*config.variables, config.index)))
+            if component == "body"
+            else config.variables
+        )
+        try:
+            result[component] = _parse(str(raw.get(name, "")), variables)
+            submitted[name] = _json(result[component])
+        except Exception as exc:  # noqa: BLE001 -- PrairieLearn exposes several parser exception types.
+            data.setdefault("format_errors", {})[name] = str(exc)
+    return result if len(result) == len(config.components) else None
 
 
 def parse(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
     submitted = data.setdefault("submitted_answers", {})
-    if _submission_is_blank(config, data):
-        if config.allow_blank:
-            submitted[config.answers_name] = ""
-        else:
-            data.setdefault("format_errors", {})[config.answers_name] = (
-                "No submitted answer."
-            )
-            submitted[config.answers_name] = None
+    if _blank(config, data):
+        submitted[config.answer] = "" if config.allow_blank else None
+        if not config.allow_blank:
+            data.setdefault("format_errors", {})[config.answer] = "No submitted answer."
         return
-
-    raw = data.get("raw_submitted_answers", {})
-    start = _parse_expression(raw.get(config.start_name, ""), config.variables)
-    end = _parse_expression(raw.get(config.end_name, ""), config.variables)
-    body = _parse_expression(
-        _despace_function_names(raw.get(config.summand_name, "")),
-        config.summand_variables,
-    )
-    submitted[config.start_name] = psu.sympy_to_json(start)
-    submitted[config.end_name] = psu.sympy_to_json(end)
-    submitted[config.summand_name] = psu.sympy_to_json(body)
-    submitted[config.answers_name] = str(_combined_expression(config, start, end, body))
+    values = _parse_values(config, data)
+    submitted[config.answer] = _canonical(config, values) if values else None
 
 
-def _submitted_components(
-    config: ElementConfig, data: dict[str, Any]
-) -> tuple[sympy.Expr, sympy.Expr, sympy.Expr]:
-    raw = data.get("raw_submitted_answers", {})
-    return (
-        _parse_expression(raw.get(config.start_name, ""), config.variables),
-        _parse_expression(raw.get(config.end_name, ""), config.variables),
-        _parse_expression(
-            _despace_function_names(raw.get(config.summand_name, "")),
-            config.summand_variables,
-        ),
-    )
+def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic]:
+    return {
+        key: cast(sympy.Basic, _decode(structured[key])) for key in config.components
+    }
 
 
-def _definitely_zero(expression: sympy.Expr) -> bool:
-    simplified = sympy.simplify(sympy.expand(expression))
-    return simplified == 0 or simplified.equals(0) is True
+def _construct(config: Config, values: dict[str, sympy.Basic]) -> sympy.Basic:
+    index = sympy.Symbol(config.index)
+    body = values["body"]
+    if config.limits == "bounds":
+        constructor = {
+            "sum": sympy.Sum,
+            "product": sympy.Product,
+            "integral": sympy.Integral,
+        }.get(config.operator)
+        if constructor is None:
+            raise NotImplementedError(
+                f"Equivalent grading for bounded {config.operator} is unsupported."
+            )
+        return constructor(body, (index, values["lower"], values["upper"]))
+    if config.limits == "approach":
+        return sympy.Limit(
+            body, index, values["target"], dir=DIRECTIONS[config.direction]
+        )
+    domain = values["domain"]
+    if not isinstance(domain, sympy.FiniteSet):
+        raise NotImplementedError(
+            "Equivalent grading of domain forms requires a concrete FiniteSet domain."
+        )
+    terms = [body.subs(index, item) for item in domain]
+    constructor = {
+        "sum": sympy.Add,
+        "product": sympy.Mul,
+        "union": sympy.Union,
+        "intersection": sympy.Intersection,
+        "disjoint-union": sympy.sets.DisjointUnion,
+        "and": sympy.And,
+        "or": sympy.Or,
+        "min": sympy.Min,
+        "max": sympy.Max,
+    }[config.operator]
+    return constructor(*terms)
 
 
-def _evaluates_equally(submitted: sympy.Expr, correct: sympy.Expr) -> bool:
+def _equivalent(
+    config: Config,
+    left_values: dict[str, sympy.Basic],
+    right_values: dict[str, sympy.Basic],
+) -> bool:
+    left, right = _construct(config, left_values), _construct(config, right_values)
+    if left == right:
+        return True
     try:
-        difference = cast(sympy.Expr, submitted.doit() - correct.doit())  # type: ignore
-        return _definitely_zero(difference)
+        left, right = left.doit(), right.doit()
+        if left == right:
+            return True
+        difference = sympy.simplify(sympy.expand(cast(Any, left) - cast(Any, right)))
+        return difference == 0 or difference.equals(0) is True
     except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
         return False
 
 
-def _affine_reindex_match(
-    config: ElementConfig,
-    submitted_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
-    correct_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
-) -> bool:
-    submitted_start, submitted_end, submitted_body = submitted_components
-    correct_start, correct_end, correct_body = correct_components
-    if config.integral:
-        bounds_reversed = _definitely_zero(
-            cast(sympy.Expr, submitted_start - correct_end)  # type: ignore
-        ) and _definitely_zero(cast(sympy.Expr, submitted_end - correct_start))  # type: ignore
-        body_negated = _definitely_zero(cast(sympy.Expr, submitted_body + correct_body))  # type: ignore
-        if bounds_reversed and body_negated:
-            return True
-
-    index = sympy.Symbol(config.index_variable)
-    for coefficient in (sympy.Integer(1), sympy.Integer(-1)):
-        if config.integral or coefficient == 1:
-            offset = cast(sympy.Expr, correct_start - submitted_start)  # type: ignore
-            if coefficient == -1:
-                offset = cast(
-                    sympy.Expr,
-                    correct_start - coefficient * submitted_start,  # type: ignore
-                )
-            bounds_match = _definitely_zero(
-                cast(sympy.Expr, coefficient * submitted_end + offset - correct_end)  # type: ignore
-            )
-        else:
-            offset = cast(sympy.Expr, correct_end + submitted_start)  # type: ignore
-            bounds_match = _definitely_zero(
-                cast(sympy.Expr, coefficient * submitted_end + offset - correct_start)  # type: ignore
-            )
-        if not bounds_match:
-            continue  # type: ignore
-
-        transformed_body = correct_body.subs(index, coefficient * index + offset)  # type: ignore
-        if config.integral:
-            transformed_body *= coefficient
-        if _definitely_zero(cast(sympy.Expr, submitted_body - transformed_body)):  # type: ignore
-            return True
-    return False
-
-
-def _equivalent_score(
-    config: ElementConfig,
-    submitted_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
-    correct_components: tuple[sympy.Expr, sympy.Expr, sympy.Expr],
-) -> float:
-    submitted = _combined_expression(config, *submitted_components)
-    correct = _combined_expression(config, *correct_components)
-    equivalent = (
-        submitted == correct
-        or _evaluates_equally(submitted, correct)
-        or _affine_reindex_match(config, submitted_components, correct_components)
-    )
-    return 1.0 if equivalent else 0.0
-
-
 def grade(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
-    correct_components = _correct_components(config, data)
-    if correct_components is None:
+    correct_json = _correct(config, data)
+    if correct_json is None:
         return
-
-    if config.allow_blank and _submission_is_blank(config, data):
-        data.setdefault("partial_scores", {})[config.answers_name] = {
-            "score": 0.0,
-            "weight": config.weight,
-        }
-        return
-
-    submitted_components = _submitted_components(config, data)
-    if config.grading_method == "exact":
-        score = float(
-            _combined_expression(config, *submitted_components)
-            == _combined_expression(config, *correct_components)
-        )
-    elif config.grading_method == "piecewise":
-        component_weights = (1, 1, config.summand_relative_weight)
-        earned = sum(
-            weight
-            for submitted, correct, weight in zip(
-                submitted_components, correct_components, component_weights
-            )
-            if submitted == correct
-        )
-        score = earned / sum(component_weights)
+    if config.allow_blank and _blank(config, data):
+        score = 0.0
     else:
-        score = _equivalent_score(config, submitted_components, correct_components)
-
-    data.setdefault("partial_scores", {})[config.answers_name] = {
+        submitted_json = data.get("submitted_answers", {}).get(config.answer)
+        if not isinstance(submitted_json, dict):
+            return
+        submitted, correct = (
+            _values(config, submitted_json),
+            _values(config, correct_json),
+        )
+        if config.grading == "exact":
+            score = float(submitted_json == correct_json)
+        elif config.grading == "component":
+            weights = [
+                config.body_weight if c == "body" else 1 for c in config.components
+            ]
+            score = sum(
+                w
+                for c, w in zip(config.components, weights)
+                if submitted[c] == correct[c]
+            ) / sum(weights)
+        else:
+            score = float(_equivalent(config, submitted, correct))
+    data.setdefault("partial_scores", {})[config.answer] = {
         "score": score,
         "weight": config.weight,
     }

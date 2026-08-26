@@ -21,7 +21,7 @@
   font-family: KaTeX_Main;
 }
 
-.pl-big-operator-input__sigma-stack {
+.pl-big-operator-input__operator-stack {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -30,7 +30,7 @@
   gap: 5px;
 }
 
-.pl-big-operator-input__sigma-stack--integral {
+.pl-big-operator-input__operator-stack--integral {
   flex-direction: row;
   align-items: center;
   gap: 0.4rem;
@@ -45,7 +45,7 @@
   gap: 1rem;
 }
 
-.pl-big-operator-input__sum .pl-big-operator-input__upper input {
+.pl-big-operator-input__bounds .pl-big-operator-input__upper input {
   text-align: center;
 }
 
@@ -80,15 +80,15 @@
   width: auto;
 }
 
-.pl-big-operator-input__sum > .pl-big-operator-input__upper {
+.pl-big-operator-input__bounds > .pl-big-operator-input__upper {
   order: 1;
 }
 
-.pl-big-operator-input__sum > .pl-big-operator-input__sigma {
+.pl-big-operator-input__bounds > .pl-big-operator-input__operator {
   order: 2;
 }
 
-.pl-big-operator-input__sum > .pl-big-operator-input__lower {
+.pl-big-operator-input__bounds > .pl-big-operator-input__lower {
   order: 3;
 }
 
@@ -100,20 +100,20 @@
   order: 2;
 }
 
-.pl-big-operator-input__sigma-stack--integral .pl-big-operator-input__upper,
-.pl-big-operator-input__sigma-stack--integral .pl-big-operator-input__lower {
+.pl-big-operator-input__operator-stack--integral .pl-big-operator-input__upper,
+.pl-big-operator-input__operator-stack--integral .pl-big-operator-input__lower {
   width: auto;
   justify-content: flex-start;
 }
 
-.pl-big-operator-input__sigma {
+.pl-big-operator-input__operator {
   font-size: 2rem;
   line-height: 0.9;
   font-weight: 400;
   margin: 0.15rem 0;
 }
 
-.pl-big-operator-input__summand {
+.pl-big-operator-input__body {
   display: inline-flex;
   align-items: center;
 }
@@ -139,11 +139,11 @@
     gap: 0.6rem;
   }
 
-  .pl-big-operator-input__summand {
+  .pl-big-operator-input__body {
     min-width: 10rem;
   }
 
-  .pl-big-operator-input__sigma {
+  .pl-big-operator-input__operator {
     font-size: 2.9rem;
   }
 
@@ -151,7 +151,7 @@
     font-size: 2rem;
   }
 
-  .pl-big-operator-input__sigma-stack--integral {
+  .pl-big-operator-input__operator-stack--integral {
     gap: 0.25rem;
   }
 }
