@@ -1,11 +1,22 @@
 <div class="pl-big-operator-input flex-nowrap" aria-label="Big operator expression input">
-  <div class="pl-big-operator-input__operator-stack{{#integral}} pl-big-operator-input__operator-stack--integral{{/integral}}">
-    {{#bounds}}<div class="pl-big-operator-input__upper">{{#upper_field}}{{> bounds-math-field }}{{/upper_field}}</div>{{/bounds}}
-    <div class="pl-big-operator-input__operator" aria-hidden="true">\(\displaystyle {{{ operator_latex }}}\)</div>
-    {{#bounds}}<div class="pl-big-operator-input__lower">{{#lower_field}}{{> bounds-math-field }}{{/lower_field}}</div>{{/bounds}}
-    {{#domain}}<div class="pl-big-operator-input__annotation">{{#annotation_field}}{{> bounds-math-field }}{{/annotation_field}}</div>{{/domain}}
-    {{#approach}}<div class="pl-big-operator-input__annotation">{{#annotation_field}}{{> bounds-math-field }}{{/annotation_field}}<span aria-hidden="true">\({{{ direction_latex }}}\)</span></div>{{/approach}}
-  </div>
+  {{#integral}}
+    <div class="pl-big-operator-input__operator-stack pl-big-operator-input__operator-stack--integral">
+      <div class="pl-big-operator-input__operator" aria-hidden="true">\(\displaystyle {{{ operator_latex }}}\)</div>
+      <div class="pl-big-operator-input__limits">
+        <div class="pl-big-operator-input__lower">{{#lower_field}}{{> bounds-math-field }}{{/lower_field}}</div>
+        <div class="pl-big-operator-input__upper">{{#upper_field}}{{> bounds-math-field }}{{/upper_field}}</div>
+      </div>
+    </div>
+  {{/integral}}
+  {{^integral}}
+    <div class="pl-big-operator-input__operator-stack{{#domain}} pl-big-operator-input__operator-stack--annotated{{/domain}}{{#approach}} pl-big-operator-input__operator-stack--annotated{{/approach}}">
+      {{#bounds}}<div class="pl-big-operator-input__upper">{{#upper_field}}{{> bounds-math-field }}{{/upper_field}}</div>{{/bounds}}
+      <div class="pl-big-operator-input__operator" aria-hidden="true">\(\displaystyle {{{ operator_latex }}}\)</div>
+      {{#bounds}}<div class="pl-big-operator-input__lower">{{#lower_field}}{{> bounds-math-field }}{{/lower_field}}</div>{{/bounds}}
+      {{#domain}}<div class="pl-big-operator-input__annotation">{{#annotation_field}}{{> bounds-math-field }}{{/annotation_field}}</div>{{/domain}}
+      {{#approach}}<div class="pl-big-operator-input__annotation">{{#annotation_field}}{{> bounds-math-field }}{{/annotation_field}}</div>{{/approach}}
+    </div>
+  {{/integral}}
   {{#body_field}}<div class="pl-big-operator-input__body"><span class="sr-only">{{ label }}</span>{{> body-math-field }}</div>{{/body_field}}
   {{#integral}}<span class="pl-big-operator-input__differential">\(\mathrm d {{{ index_label }}}\)</span>{{/integral}}
 </div>
