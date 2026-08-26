@@ -145,7 +145,7 @@
   font-size: 1.5rem;
 }
 
-.pl-big-operator-input__label.sr-only {
+.pl-big-operator-input__label.visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
