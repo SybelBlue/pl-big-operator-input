@@ -275,6 +275,42 @@ def test_partially_blank_submission_has_a_descriptive_field_error():
     assert '>0</span>' not in rendered
 
 
+def test_body_math_field_is_the_last_input_group_child_when_invalid():
+    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "1"})
+    markup = html(operator="union")
+    mod.parse(markup, state)
+
+    document = mod.lxml.html.fragment_fromstring(mod.render(markup, state))
+    body_group = document.xpath(
+        './/div[contains(concat(" ", normalize-space(@class), " "), '
+        '" pl-big-operator-input__body ")]/span['
+        'contains(concat(" ", normalize-space(@class), " "), '
+        '" pl-big-operator-input__math-field ")]'
+    )[0]
+    assert body_group[-1].tag == "math-field"
+    assert body_group[-2].classes == {"invalid-feedback", "d-block"}
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    assert "border-top-left-radius: var(--bs-border-radius) !important" in css
+    assert "border-bottom-left-radius: var(--bs-border-radius) !important" in css
+
+
+def test_initial_latex_is_stored_outside_math_fields():
+    state = data(
+        raw={
+            "op-domain-latex": r"\emptyset",
+            "op-body-latex": r"\emptyset",
+        }
+    )
+
+    document = mod.lxml.html.fragment_fromstring(mod.render(html(operator="union"), state))
+
+    for name in ("op-domain", "op-body"):
+        math_field = document.get_element_by_id(f"big-operator-input-{name}")
+        latex_input = document.get_element_by_id(f"big-operator-input-latex-{name}")
+        assert (math_field.text or "").strip() == ""
+        assert latex_input.get("value") == r"\emptyset"
+
+
 def test_non_set_combinator_bodies_still_accept_expressions():
     state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k"})
     mod.parse(html(operator="and"), state)

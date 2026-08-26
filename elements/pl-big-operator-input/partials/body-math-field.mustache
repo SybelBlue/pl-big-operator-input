@@ -28,9 +28,7 @@
     custom-functions="{{ custom_functions }}"
     allow-trig="allow-trig"
     {{#label}}aria-label="{{ label }}"{{/label}}
-  >
-    {{ raw_submitted_answer_latex }}
-  </math-field>
+  ></math-field>
   {{#parse_error}}
     <span id="{{ error_id }}" class="invalid-feedback d-block" role="alert">{{ parse_error }}</span>
   {{/parse_error}}
