@@ -454,7 +454,9 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
     if _blank(config, data):
         submitted[config.answer] = "" if config.allow_blank else None
         if not config.allow_blank:
-            data.setdefault("format_errors", {})[config.answer] = "No submitted answer."
+            errors = data.setdefault("format_errors", {})
+            for component in config.components:
+                errors[config.name(component)] = "No submitted answer."
         return
     values = _parse_values(config, data)
     submitted[config.answer] = _canonical(config, values) if values else None
