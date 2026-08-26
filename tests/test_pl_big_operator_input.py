@@ -177,6 +177,18 @@ def test_domain_structured_answer_and_rendering():
     assert "Index domain" in rendered and "Big operator expression input" in rendered
 
 
+@pytest.mark.parametrize("operator", ["min", "max"])
+def test_min_max_correct_answer_rendering(operator):
+    answer = canonical(operator=operator)
+    answer["body"] = mod._json(sympy.Symbol("k") ** 2)
+    state = data(answer, panel="answer")
+
+    rendered = mod.render(html(operator=operator), state)
+
+    assert rf"\{operator}_{{k\in \left\{{1, 2\right\}}}} k^{{2}}" in rendered
+    assert ">?</span>" not in rendered
+
+
 @pytest.mark.parametrize(
     "operator", ["union", "intersection", "disjoint-union", "and", "or", "min", "max"]
 )
@@ -230,6 +242,37 @@ def test_set_combinator_bodies_reject_non_sets_at_parse_time(operator):
 
     assert state["submitted_answers"]["op"] is None
     assert state["format_errors"]["op-body"] == "This field must be a set."
+
+
+@pytest.mark.parametrize(
+    ("invalid_field", "valid_field"),
+    [("op-domain", "op-body"), ("op-body", "op-domain")],
+)
+def test_parse_errors_are_rendered_with_their_fields(invalid_field, valid_field):
+    raw = {"op-domain": "FiniteSet(1, 2)", "op-body": "FiniteSet(k)"}
+    raw[invalid_field] = "1"
+    state = data(raw=raw)
+    markup = html(operator="union")
+    mod.parse(markup, state)
+
+    rendered = mod.render(markup, state)
+    error_id = f"big-operator-input-error-{invalid_field}"
+    assert f'aria-describedby="{error_id}"' in rendered
+    assert f'id="{error_id}"' in rendered
+    assert '<span id="' + error_id + '" class="invalid-feedback d-block" role="alert">' in rendered
+    assert "This field must be a set." in rendered
+    assert f"big-operator-input-error-{valid_field}" not in rendered
+
+
+def test_partially_blank_submission_has_a_descriptive_field_error():
+    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": ""})
+    markup = html(operator="union")
+    mod.parse(markup, state)
+
+    assert state["format_errors"]["op-body"] == "No submitted answer."
+    rendered = mod.render(markup, state)
+    assert '>No submitted answer.</span>' in rendered
+    assert '>0</span>' not in rendered
 
 
 def test_non_set_combinator_bodies_still_accept_expressions():
