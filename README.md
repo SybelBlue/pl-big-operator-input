@@ -1,4 +1,4 @@
-# `pl-sum-notation-input` element
+# `pl-big-operator-input` element
 
 Fill in the parts of a summation or integral expression.
 
@@ -7,11 +7,11 @@ Fill in the parts of a summation or integral expression.
 question.html
 
 ```html
-<pl-sum-notation-input
+<pl-big-operator-input
   answers-name="sigma1"
   index-variable="k"
   variables="x"
-></pl-sum-notation-input>
+></pl-big-operator-input>
 ```
 
 server.py
@@ -35,12 +35,12 @@ This renders a sigma-style input with separate fields for the lower limit, upper
 If `integral="true"`, the element switches to integral notation and appends the differential automatically.
 
 ```html
-<pl-sum-notation-input
+<pl-big-operator-input
   answers-name="int1"
   index-variable="x"
   variables="a, b"
   integral="true"
-></pl-sum-notation-input>
+></pl-big-operator-input>
 ```
 
 ```python

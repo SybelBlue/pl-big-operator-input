@@ -24,12 +24,12 @@ def _find_module_path() -> Path:
         module_path = (
             candidate
             / "elements"
-            / "pl-sum-notation-input"
-            / "pl-sum-notation-input.py"
+            / "pl-big-operator-input"
+            / "pl-big-operator-input.py"
         )
         if module_path.exists():
             return module_path
-    raise FileNotFoundError("Could not locate the pl-sum-notation-input module")
+    raise FileNotFoundError("Could not locate the pl-big-operator-input module")
 
 
 def _load_module():
@@ -86,10 +86,10 @@ def test_summand_partial_uses_formula_editor():
 def test_math_field_dependencies_include_mathlive_and_initializer():
     element_dir = _find_module_path().parent
     info = (element_dir / "info.json").read_text(encoding="utf-8")
-    initializer = (element_dir / "pl-sum-notation-input.js").read_text(encoding="utf-8")
+    initializer = (element_dir / "pl-big-operator-input.js").read_text(encoding="utf-8")
 
     assert '"mathlive/mathlive.min.js"' in info
-    assert '"pl-sum-notation-input.js"' in info
+    assert '"pl-big-operator-input.js"' in info
     assert "window.PLSumNotationInput" in initializer
     assert "getValue('plain-text')" in initializer
     assert "getValue('latex')" in initializer
@@ -105,8 +105,8 @@ def test_prepare_serializes_only_the_combined_correct_answer():
         "correct_answers": {"sigma1": correct},
     }
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="k"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="k"></pl-big-operator-input>'
     )
 
     mod.prepare(html, data)
@@ -130,8 +130,8 @@ def test_prepare_serializes_only_the_combined_correct_answer():
 def test_prepare_accepts_supported_sum_answer_formats(correct_answer):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" '
-        'index-variable="k"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" '
+        'index-variable="k"></pl-big-operator-input>'
     )
     data = {"params": {}, "correct_answers": {"sigma1": correct_answer}}
 
@@ -156,8 +156,8 @@ def test_prepare_accepts_supported_sum_answer_formats(correct_answer):
 def test_prepare_accepts_supported_integral_answer_formats(correct_answer):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="int1" index-variable="x" '
-        'integral="true"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="int1" index-variable="x" '
+        'integral="true"></pl-big-operator-input>'
     )
     data = {"params": {}, "correct_answers": {"int1": correct_answer}}
 
@@ -181,9 +181,9 @@ def test_prepare_accepts_a_string_correct_answer_attribute(
 ):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
         f'correct-answer="{correct_answer}"{integral_attribute}'
-        "></pl-sum-notation-input>"
+        "></pl-big-operator-input>"
     )
     data = {"params": {}, "correct_answers": {}}
 
@@ -198,8 +198,8 @@ def test_prepare_accepts_a_string_correct_answer_attribute(
 def test_prepare_rejects_a_non_sum_correct_answer_attribute():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'correct-answer="k**2"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'correct-answer="k**2"></pl-big-operator-input>'
     )
 
     with pytest.raises(TypeError, match="must be a SymPy Sum"):
@@ -209,8 +209,8 @@ def test_prepare_rejects_a_non_sum_correct_answer_attribute():
 def test_render_emits_a_sigma_layout_with_three_inputs():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -228,8 +228,8 @@ def test_render_emits_a_sigma_layout_with_three_inputs():
     assert 'name="sigma1-end"' in rendered
     assert 'name="sigma1-summand"' in rendered
     assert r"\(k = \)" in rendered
-    assert rendered.index('class="pl-sum-notation-input__lower"') < rendered.index(
-        'class="pl-sum-notation-input__upper"'
+    assert rendered.index('class="pl-big-operator-input__lower"') < rendered.index(
+        'class="pl-big-operator-input__upper"'
     )
     assert 'allow-trig="allow-trig"' in rendered
 
@@ -237,8 +237,8 @@ def test_render_emits_a_sigma_layout_with_three_inputs():
 def test_render_supports_greek_latex_index_variables():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="theta" '
-        'variables="x"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="theta" '
+        'variables="x"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -254,7 +254,7 @@ def test_render_supports_greek_latex_index_variables():
 
 def test_render_does_not_require_correct_answers():
     mod = _load_module()
-    html = '<pl-sum-notation-input answers-name="sigma1" index-variable="theta" variables="x"></pl-sum-notation-input>'
+    html = '<pl-big-operator-input answers-name="sigma1" index-variable="theta" variables="x"></pl-big-operator-input>'
     data = {"params": {}, "correct_answers": {}, "panel": "question"}
 
     mod.prepare(html, data)
@@ -266,8 +266,8 @@ def test_render_does_not_require_correct_answers():
 def test_parse_accepts_greek_latex_index_variables():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="theta" '
-        'variables="x"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="theta" '
+        'variables="x"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -290,8 +290,8 @@ def test_parse_accepts_greek_latex_index_variables():
 def test_render_emits_an_integral_layout_with_horizontal_limits():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="x" '
-        'variables="n" integral="true"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="x" '
+        'variables="n" integral="true"></pl-big-operator-input>'
     )
     x = sympy.Symbol("x")
     data = {
@@ -305,10 +305,10 @@ def test_render_emits_an_integral_layout_with_horizontal_limits():
 
     assert "∫" in rendered or r"\int" in rendered
     assert 'aria-label="Integral notation input"' in rendered
-    assert "pl-sum-notation-input__sigma-stack--integral" in rendered
-    assert "pl-sum-notation-input__limits" in rendered
-    assert rendered.index('class="pl-sum-notation-input__lower"') < rendered.index(
-        'class="pl-sum-notation-input__upper"'
+    assert "pl-big-operator-input__sigma-stack--integral" in rendered
+    assert "pl-big-operator-input__limits" in rendered
+    assert rendered.index('class="pl-big-operator-input__lower"') < rendered.index(
+        'class="pl-big-operator-input__upper"'
     )
     assert rendered.count("<math-field") == 3
     assert rendered.count('type="text"') == 0
@@ -320,8 +320,8 @@ def test_render_emits_an_integral_layout_with_horizontal_limits():
 def test_render_emits_one_submission_badge_for_non_piecewise_grading():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n"></pl-big-operator-input>'
     )
     data = {
         "panel": "submission",
@@ -343,8 +343,8 @@ def test_render_emits_one_submission_badge_for_non_piecewise_grading():
 def test_parse_builds_the_submitted_sympy_sum():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -374,8 +374,8 @@ def test_allow_blank_if_and_only_if_prevents_a_blank_format_error(
 ):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k"'
-        f"{allow_blank_attribute}></pl-sum-notation-input>"
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k"'
+        f"{allow_blank_attribute}></pl-big-operator-input>"
     )
     data = {
         "raw_submitted_answers": {
@@ -406,8 +406,8 @@ def test_schema_declares_allow_blank_as_a_boolean_attribute():
 def test_parse_stores_child_answers_as_pl_json():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -450,8 +450,8 @@ def test_parse_stores_child_answers_as_pl_json():
 def test_parse_despaces_formula_editor_trig_names_in_summand():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n"></pl-big-operator-input>'
     )
     data = {
         "params": {},
@@ -501,8 +501,8 @@ def test_grade_awards_full_credit_for_an_exact_match(grading_method):
         "" if grading_method is None else f' grading-method="{grading_method}"'
     )
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        f'variables="n"{method_attribute}></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        f'variables="n"{method_attribute}></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -547,9 +547,9 @@ def test_grade_accepts_an_infinite_upper_bound(
 ):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" '
+        '<pl-big-operator-input answers-name="sigma1" '
         f'index-variable="{index_variable}"{integral_attribute}'
-        "></pl-sum-notation-input>"
+        "></pl-big-operator-input>"
     )
     data = _prepare_grade_data(
         mod,
@@ -570,8 +570,8 @@ def test_grade_accepts_an_infinite_upper_bound(
 def test_exact_grading_rejects_an_equivalent_but_different_sum():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n" grading-method="exact"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n" grading-method="exact"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -604,8 +604,8 @@ def test_exact_grading_rejects_an_equivalent_but_different_sum():
 def test_piecewise_grading_uses_component_weights(start, end, body, expected_score):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'variables="n" grading-method="piecewise"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'variables="n" grading-method="piecewise"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -625,9 +625,9 @@ def test_piecewise_grading_uses_component_weights(start, end, body, expected_sco
 def test_piecewise_grading_honors_custom_summand_relative_weight():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
         'grading-method="piecewise" summand-relative-weight="2"'
-        "></pl-sum-notation-input>"
+        "></pl-big-operator-input>"
     )
     data = _prepare_grade_data(
         mod,
@@ -651,8 +651,8 @@ def test_piecewise_grading_honors_custom_summand_relative_weight():
 def test_equivalent_grading_accepts_evaluation_and_affine_reindexing(start, end, body):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'grading-method="equivalent"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -668,8 +668,8 @@ def test_equivalent_grading_accepts_evaluation_and_affine_reindexing(start, end,
 def test_equivalent_grading_accepts_expanded_summand():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'grading-method="equivalent"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -688,8 +688,8 @@ def test_equivalent_grading_accepts_signed_integral_bound_reversal(body):
     mod = _load_module()
     x = sympy.Symbol("x")
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="x" '
-        'integral="true" grading-method="equivalent"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="x" '
+        'integral="true" grading-method="equivalent"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -710,8 +710,8 @@ def test_equivalent_grading_accepts_signed_integral_bound_reversal(body):
 def test_equivalent_grading_rejects_inequivalent_sums(start, end, body):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        'grading-method="equivalent"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        'grading-method="equivalent"></pl-big-operator-input>'
     )
     data = _prepare_grade_data(
         mod,
@@ -731,8 +731,8 @@ def test_equivalent_grading_rejects_inequivalent_sums(start, end, body):
 def test_prepare_rejects_invalid_grading_configuration(attribute):
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" index-variable="k" '
-        f"{attribute}></pl-sum-notation-input>"
+        '<pl-big-operator-input answers-name="sigma1" index-variable="k" '
+        f"{attribute}></pl-big-operator-input>"
     )
 
     with pytest.raises(ValueError):
@@ -744,7 +744,7 @@ def test_prepare_rejects_missing_required_attributes():
 
     with pytest.raises(ValueError, match='Required attribute ".*?" missing'):
         mod.prepare(
-            '<pl-sum-notation-input index-variable="k"></pl-sum-notation-input>',
+            '<pl-big-operator-input index-variable="k"></pl-big-operator-input>',
             {"params": {}, "correct_answers": {}},
         )
 
@@ -754,8 +754,8 @@ def test_prepare_rejects_a_non_sum_correct_answer():
 
     with pytest.raises(TypeError, match="must be a SymPy Sum"):
         mod.prepare(
-            '<pl-sum-notation-input answers-name="sigma1" '
-            'index-variable="k"></pl-sum-notation-input>',
+            '<pl-big-operator-input answers-name="sigma1" '
+            'index-variable="k"></pl-big-operator-input>',
             {"params": {}, "correct_answers": {"sigma1": sympy.Integer(1)}},
         )
 
@@ -763,8 +763,8 @@ def test_prepare_rejects_a_non_sum_correct_answer():
 def test_grade_does_nothing_without_a_correct_answer():
     mod = _load_module()
     html = (
-        '<pl-sum-notation-input answers-name="sigma1" '
-        'index-variable="k"></pl-sum-notation-input>'
+        '<pl-big-operator-input answers-name="sigma1" '
+        'index-variable="k"></pl-big-operator-input>'
     )
     data = {
         "correct_answers": {},
@@ -786,7 +786,7 @@ def test_prepare_rejects_missing_index_variable():
 
     with pytest.raises(ValueError, match='Required attribute ".*?" missing'):
         mod.prepare(
-            '<pl-sum-notation-input answers-name="sigma1" '
-            'variables="k"></pl-sum-notation-input>',
+            '<pl-big-operator-input answers-name="sigma1" '
+            'variables="k"></pl-big-operator-input>',
             {"params": {}, "correct_answers": {}},
         )
