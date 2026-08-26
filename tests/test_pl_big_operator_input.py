@@ -212,6 +212,34 @@ def test_parse_only_relevant_fields_and_allows_index_in_body():
     assert "op-start" not in state["submitted_answers"]
 
 
+@pytest.mark.parametrize(
+    "operator", ["sum", "product", "integral", "union", "and", "min"]
+)
+def test_domain_fields_reject_non_sets_at_parse_time(operator):
+    state = data(raw={"op-domain": "1", "op-body": "FiniteSet(k)"})
+    mod.parse(html(operator=operator, limits="domain"), state)
+
+    assert state["submitted_answers"]["op"] is None
+    assert state["format_errors"]["op-domain"] == "This field must be a set."
+
+
+@pytest.mark.parametrize("operator", ["union", "intersection", "disjoint-union"])
+def test_set_combinator_bodies_reject_non_sets_at_parse_time(operator):
+    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k"})
+    mod.parse(html(operator=operator), state)
+
+    assert state["submitted_answers"]["op"] is None
+    assert state["format_errors"]["op-body"] == "This field must be a set."
+
+
+def test_non_set_combinator_bodies_still_accept_expressions():
+    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k"})
+    mod.parse(html(operator="and"), state)
+
+    assert state["submitted_answers"]["op"] is not None
+    assert "format_errors" not in state
+
+
 def test_component_grading_weights_body():
     k = sympy.Symbol("k")
     correct = sympy.Sum(k**2, (k, 1, 4))
@@ -299,9 +327,9 @@ def test_domain_integral_parses_and_reconstructs_notation():
     markup = html(
         operator="integral",
         limits="domain",
-        **{"index-variable": "z", "variables": "Gamma", "grading-method": "exact"},
+        **{"index-variable": "z", "grading-method": "exact"},
     )
-    state = data(raw={"op-domain": "Gamma", "op-body": "z"}, panel="submission")
+    state = data(raw={"op-domain": "Interval(0, 1)", "op-body": "z"}, panel="submission")
     state["partial_scores"] = {"op": {"score": 1}}
     mod.parse(markup, state)
     assert state["submitted_answers"]["op"]["limits"] == "domain"
@@ -315,7 +343,7 @@ def test_domain_integral_parses_and_reconstructs_notation():
         "body",
     }
     rendered = mod.render(markup, state)
-    assert r"\int_{Gamma} z\,\mathrm{d}z" in rendered
+    assert r"\int_{Interval(0, 1)} z\,\mathrm{d}z" in rendered
 
 
 @pytest.mark.parametrize("operator", ["union", "limit"])
