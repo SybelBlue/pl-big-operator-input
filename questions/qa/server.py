@@ -5,7 +5,9 @@ import sympy
 
 
 def structured(operator, index, domain, body):
-    encode = lambda value: psu.sympy_to_json(value, allow_sets=True)
+    encode = lambda value: psu.sympy_to_json(
+        value, allow_sets=True, allow_complex=True, allow_trig_functions=True
+    )
     return {
         "_type": "operator_expression",
         "_version": 1,
@@ -24,15 +26,15 @@ def generate(data):
         {
             "sum": psu.sympy_to_json(cast(Any, sympy.Sum(k**2, (k, 1, 4)))),
             "product": psu.sympy_to_json(cast(Any, sympy.Product(k, (k, 1, 4)))),
-            "integral": psu.sympy_to_json(sympy.Integral(x**2, (x, 0, 1))),
+            "integral": psu.sympy_to_json(cast(Any, sympy.Integral(x**2, (x, 0, 1)))),
             "contour": structured("integral", z, gamma, z),
             "limit": psu.sympy_to_json(sympy.Limit(sympy.sin(x) / x, x, 0, dir="+")),
             "union": structured("union", k, sympy.FiniteSet(1, 2), sympy.FiniteSet(k)),
             "intersection": structured(
                 "intersection", k, sympy.FiniteSet(1, 2), sympy.FiniteSet(k)
             ),
-            "and": structured("and", k, sympy.FiniteSet(1, 2), k > 0),
-            "or": structured("or", k, sympy.FiniteSet(1, 2), k > 0),
+            "and": structured("and", k, sympy.FiniteSet(1, 2), k),
+            "or": structured("or", k, sympy.FiniteSet(1, 2), k),
             "min": structured("min", x, sympy.FiniteSet(1, 2), x**2),
             "max": structured("max", x, sympy.FiniteSet(1, 2), x**2),
         }
