@@ -33,13 +33,15 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 | --- | --- | --- | --- |
 | sum | `\sum` | bounds | bounds, domain |
 | product | `\prod` | bounds | bounds, domain |
-| integral | `\int` | bounds | bounds only |
+| integral | `\int` | bounds | bounds, domain |
 | limit | `\lim` | approach | approach only |
 | union, intersection, disjoint-union | `\bigcup`, `\bigcap`, `\bigsqcup` | domain | bounds, domain |
 | and, or | `\bigwedge`, `\bigvee` | domain | bounds, domain |
 | min, max | `\min`, `\max` | domain | bounds, domain |
 
 Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<name>-domain` and `<name>-body`. Approach forms use `<name>-target` and `<name>-body`. Only fields in the selected form are created or parsed. A one-sided limit adds `-` or `+` to the target display; the public combined answer retains the descriptive direction value.
+
+For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Domain integrals require a canonical structured correct answer. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
 
 ## Canonical answer
 

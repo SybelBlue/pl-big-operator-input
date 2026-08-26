@@ -3,8 +3,10 @@
     <div class="pl-big-operator-input__operator-stack pl-big-operator-input__operator-stack--integral">
       <div class="pl-big-operator-input__operator" aria-hidden="true">\(\displaystyle {{{ operator_latex }}}\)</div>
       <div class="pl-big-operator-input__limits">
-        <div class="pl-big-operator-input__lower">{{#lower_field}}{{> bounds-math-field }}{{/lower_field}}</div>
-        <div class="pl-big-operator-input__upper">{{#upper_field}}{{> bounds-math-field }}{{/upper_field}}</div>
+        {{#bounds}}<div class="pl-big-operator-input__lower">{{#lower_field}}{{> bounds-math-field }}{{/lower_field}}</div>{{/bounds}}
+        {{#bounds}}<div class="pl-big-operator-input__upper">{{#upper_field}}{{> bounds-math-field }}{{/upper_field}}</div>{{/bounds}}
+        {{#domain}}<div class="pl-big-operator-input__domain-spacer" aria-hidden="true"></div>{{/domain}}
+        {{#domain}}<div class="pl-big-operator-input__lower pl-big-operator-input__annotation">{{#annotation_field}}{{> bounds-math-field }}{{/annotation_field}}</div>{{/domain}}
       </div>
     </div>
   {{/integral}}

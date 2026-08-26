@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import chevron  # type: ignore
 import lxml.html
@@ -29,6 +30,7 @@ OPS = {
 FLEXIBLE = {
     "sum",
     "product",
+    "integral",
     "union",
     "intersection",
     "disjoint-union",
@@ -38,13 +40,32 @@ FLEXIBLE = {
     "max",
 }
 DIRECTIONS = {"two-sided": "+-", "from-left": "-", "from-right": "+"}
+SYMPY_CONSTRUCTORS: dict[str, type[sympy.Basic]] = {
+    "sum": sympy.Sum,
+    "product": sympy.Product,
+    "integral": sympy.Integral,
+    "union": sympy.Union,
+    "intersection": sympy.Intersection,
+    "disjoint-union": sympy.sets.DisjointUnion,
+    "and": sympy.And,
+    "or": sympy.Or,
+    "min": sympy.Min,
+    "max": sympy.Max,
+}
+type LimitFormat = Literal["bounds", "domain", "approach"]
+type Component = Literal["lower", "upper", "domain", "target", "body"]
+COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
+    "bounds": ("lower", "upper", "body"),
+    "domain": ("domain", "body"),
+    "approach": ("target", "body"),
+}
 
 
 @dataclass(frozen=True)
 class Config:
     answer: str
     operator: str
-    limits: str
+    limits: LimitFormat
     index: str
     variables: tuple[str, ...]
     direction: str
@@ -55,12 +76,8 @@ class Config:
     correct_attribute: str | None
 
     @property
-    def components(self) -> tuple[str, ...]:
-        return {
-            "bounds": ("lower", "upper", "body"),
-            "domain": ("domain", "body"),
-            "approach": ("target", "body"),
-        }[self.limits]
+    def components(self):
+        return COMPONENT_MAP[self.limits]
 
     def name(self, component: str) -> str:
         return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
@@ -103,7 +120,7 @@ def _config(html: str) -> Config:
     return Config(
         required["answers-name"],
         operator,
-        limits,
+        cast(LimitFormat, limits),
         required["index-variable"],
         tuple(x.strip() for x in variables.split(",") if x.strip()),
         direction,
@@ -288,7 +305,12 @@ def _question(config: Config, data: dict[str, Any]) -> str:
         context["upper_field"] = _field(config, "upper", "Upper bound", 7, data)
     elif config.limits == "domain":
         context["annotation_field"] = _field(
-            config, "domain", "Index domain", 10, data, rf"\({index} \in \)"
+            config,
+            "domain",
+            "Integration domain" if config.operator == "integral" else "Index domain",
+            10,
+            data,
+            None if config.operator == "integral" else rf"\({index} \in \)",
         )
     else:
         dir = {"two-sided": None, "from-left": "−", "from-right": "+"}[config.direction]
@@ -319,6 +341,8 @@ def _tex(config: Config, data: dict[str, Any]) -> str:
             return rf"{op}_{{{get('lower')}}}^{{{get('upper')}}} {get('body')}\,\mathrm{{d}}{index}"
         return rf"{op}_{{{index}={get('lower')}}}^{{{get('upper')}}} {get('body')}"
     if config.limits == "domain":
+        if config.operator == "integral":
+            return rf"{op}_{{{get('domain')}}} {get('body')}\,\mathrm{{d}}{index}"
         return rf"{op}_{{{index}\in {get('domain')}}} {get('body')}"
     direction = {"two-sided": "", "from-left": "^-", "from-right": "^+"}[
         config.direction
@@ -415,38 +439,27 @@ def _construct(config: Config, values: dict[str, sympy.Basic]) -> sympy.Basic:
     index = sympy.Symbol(config.index)
     body = values["body"]
     if config.limits == "bounds":
-        constructor = {
-            "sum": sympy.Sum,
-            "product": sympy.Product,
-            "integral": sympy.Integral,
-        }.get(config.operator)
-        if constructor is None:
+        bound_constructor = SYMPY_CONSTRUCTORS.get(config.operator)
+        if bound_constructor is None:
             raise NotImplementedError(
                 f"Equivalent grading for bounded {config.operator} is unsupported."
             )
-        return constructor(body, (index, values["lower"], values["upper"]))
+        return bound_constructor(body, (index, values["lower"], values["upper"]))
     if config.limits == "approach":
         return sympy.Limit(
             body, index, values["target"], dir=DIRECTIONS[config.direction]
         )
     domain = values["domain"]
+    if config.operator == "integral":
+        raise NotImplementedError(
+            "Equivalent grading for domain integrals is unsupported; use exact or component grading."
+        )
     if not isinstance(domain, sympy.FiniteSet):
         raise NotImplementedError(
             "Equivalent grading of domain forms requires a concrete FiniteSet domain."
         )
     terms = [body.subs(index, item) for item in domain]
-    constructor = {
-        "sum": sympy.Add,
-        "product": sympy.Mul,
-        "union": sympy.Union,
-        "intersection": sympy.Intersection,
-        "disjoint-union": sympy.sets.DisjointUnion,
-        "and": sympy.And,
-        "or": sympy.Or,
-        "min": sympy.Min,
-        "max": sympy.Max,
-    }[config.operator]
-    return constructor(*terms)
+    return SYMPY_CONSTRUCTORS[config.operator](*terms)
 
 
 def _equivalent(
