@@ -411,6 +411,25 @@ def test_integral_and_submission_reconstruct_complete_notation():
     assert rendered.count("badge") == 1
 
 
+@pytest.mark.parametrize(
+    ("score", "badge_class", "label"),
+    [
+        (1, "text-bg-success", "100%"),
+        (0.4, "text-bg-warning", "40%"),
+        (0, "text-bg-danger", "0%"),
+    ],
+)
+def test_question_view_shows_score_badge(score, badge_class, label):
+    state = data()
+    state["partial_scores"] = {"op": {"score": score}}
+
+    rendered = mod.render(html(), state)
+
+    assert rendered.count("badge") == 1
+    assert badge_class in rendered
+    assert label in rendered
+
+
 def test_set_submission_renders_literal_braces():
     markup = html(operator="union")
     state = data(raw={"op-domain": "{1, 2}", "op-body": "{k}"})
