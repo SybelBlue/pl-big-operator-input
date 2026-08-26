@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import chevron  # type: ignore
+import chevron
 import lxml.html
-import prairielearn as pl  # type: ignore
-import prairielearn.sympy_utils as psu  # type: ignore
+import prairielearn as pl
+import prairielearn.sympy_utils as psu
 import sympy
 import sympy.sets
 
