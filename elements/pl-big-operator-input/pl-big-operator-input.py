@@ -234,10 +234,13 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
 
 
 def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
+    prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
     raw = (
         config.correct_attribute
         if config.correct_attribute is not None
-        else data.get("correct_answers", {}).get(config.answer)
+        else data.get("correct_answers", {}).get(
+            config.answer, data.get("params", {}).get(prepared_key)
+        )
     )
     if raw is None:
         return None
@@ -257,6 +260,9 @@ def prepare(element_html: str, data: dict[str, Any]) -> None:
     correct = _correct(config, data)
     if correct is not None:
         data.setdefault("correct_answers", {})[config.answer] = correct
+        data.setdefault("params", {})[
+            f"_pl_big_operator_input_correct_{config.answer}"
+        ] = correct
 
 
 def _field(
@@ -354,7 +360,7 @@ def _tex(config: Config, data: dict[str, Any]) -> str:
 def _correct_tex(config: Config, data: dict[str, Any]) -> str:
     structured = _correct(config, data)
     if structured is None:
-        return "?"
+        return ""
     values = _values(config, structured)
     raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
     return _tex(config, {"raw_submitted_answers": raw})
@@ -368,7 +374,7 @@ def render(element_html: str, data: dict[str, Any]) -> str:
     if panel == "answer":
         return chevron.render(
             (HERE / "pl-big-operator-input-submission.mustache").read_text(),
-            {"tex": _correct_tex(config, data), "correct": True},
+            {"tex": _correct_tex(config, data)},
         )
     score = float(data.get("partial_scores", {}).get(config.answer, {}).get("score", 0))
     context: dict[str, Any] = {"tex": _tex(config, data)}

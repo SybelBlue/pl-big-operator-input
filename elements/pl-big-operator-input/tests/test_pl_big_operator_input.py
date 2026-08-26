@@ -139,7 +139,7 @@ def test_prepare_decodes_serialized_binders_without_interval_parsing(operator, c
 )
 def test_limit_directions(direction, sympy_direction):
     k = sympy.Symbol("k")
-    state = data(sympy.Limit(sympy.sin(k) / k, k, 0, dir=sympy_direction))
+    state = data(sympy.Limit(sympy.sin(k) / k, k, 0, dir=sympy_direction))  # type: ignore
     mod.prepare(html(operator="limit", **{"limit-direction": direction}), state)
     assert state["correct_answers"]["op"]["direction"] == direction
     rendered = mod.render(
@@ -187,6 +187,31 @@ def test_min_max_correct_answer_rendering(operator):
 
     assert rf"\{operator}_{{k\in \left\{{1, 2\right\}}}} k^{{2}}" in rendered
     assert ">?</span>" not in rendered
+    assert "badge" not in rendered
+
+
+@pytest.mark.parametrize("operator", ["min", "max"])
+def test_min_max_answer_rendering_uses_prepared_answer(operator):
+    answer = canonical(operator=operator)
+    answer["body"] = mod._json(sympy.Symbol("k") ** 2)
+    state = data(answer)
+    markup = html(operator=operator)
+    mod.prepare(markup, state)
+    state["correct_answers"].clear()
+    state["panel"] = "answer"
+
+    rendered = mod.render(markup, state)
+
+    assert rf"\{operator}_{{k\in \left\{{1, 2\right\}}}} k^{{2}}" in rendered
+    assert "?" not in rendered
+    assert "badge" not in rendered
+
+
+@pytest.mark.parametrize("operator", ["min", "max"])
+def test_min_max_answer_panel_never_renders_question_mark_fallback(operator):
+    rendered = mod.render(html(operator=operator), data(panel="answer"))
+
+    assert "?" not in rendered
 
 
 @pytest.mark.parametrize(
@@ -259,7 +284,10 @@ def test_parse_errors_are_rendered_with_their_fields(invalid_field, valid_field)
     error_id = f"big-operator-input-error-{invalid_field}"
     assert f'aria-describedby="{error_id}"' in rendered
     assert f'id="{error_id}"' in rendered
-    assert '<span id="' + error_id + '" class="invalid-feedback d-block" role="alert">' in rendered
+    assert (
+        '<span id="' + error_id + '" class="invalid-feedback d-block" role="alert">'
+        in rendered
+    )
     assert "This field must be a set." in rendered
     assert f"big-operator-input-error-{valid_field}" not in rendered
 
@@ -271,8 +299,8 @@ def test_partially_blank_submission_has_a_descriptive_field_error():
 
     assert state["format_errors"]["op-body"] == "No submitted answer."
     rendered = mod.render(markup, state)
-    assert '>No submitted answer.</span>' in rendered
-    assert '>0</span>' not in rendered
+    assert ">No submitted answer.</span>" in rendered
+    assert ">0</span>" not in rendered
 
 
 def test_body_math_field_is_the_last_input_group_child_when_invalid():
@@ -302,7 +330,9 @@ def test_initial_latex_is_stored_outside_math_fields():
         }
     )
 
-    document = mod.lxml.html.fragment_fromstring(mod.render(html(operator="union"), state))
+    document = mod.lxml.html.fragment_fromstring(
+        mod.render(html(operator="union"), state)
+    )
 
     for name in ("op-domain", "op-body"):
         math_field = document.get_element_by_id(f"big-operator-input-{name}")
@@ -408,7 +438,9 @@ def test_domain_integral_parses_and_reconstructs_notation():
         limits="domain",
         **{"index-variable": "z", "grading-method": "exact"},
     )
-    state = data(raw={"op-domain": "Interval(0, 1)", "op-body": "z"}, panel="submission")
+    state = data(
+        raw={"op-domain": "Interval(0, 1)", "op-body": "z"}, panel="submission"
+    )
     state["partial_scores"] = {"op": {"score": 1}}
     mod.parse(markup, state)
     assert state["submitted_answers"]["op"]["limits"] == "domain"
