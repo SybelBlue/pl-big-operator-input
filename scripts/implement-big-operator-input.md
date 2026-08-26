@@ -1,8 +1,8 @@
 # Implement `pl-big-operator-input`
 
-Generalize the existing `pl-sum-notation-input` PrairieLearn element into
+Generalize the existing `pl-big-operator-input` PrairieLearn element into
 `pl-big-operator-input`. Treat
-`elements/pl-sum-notation-input/pl-sum-notation-input.schema.json` as the
+`elements/pl-big-operator-input/pl-big-operator-input.schema.json` as the
 authoritative API specification at the start of this task, including any edits
 made after this prompt was written.
 
@@ -12,7 +12,7 @@ the old element name or its removed attributes.
 ## Rename the element
 
 Rename the element directory and every element-owned file from
-`pl-sum-notation-input` to `pl-big-operator-input`. Update the controller,
+`pl-big-operator-input` to `pl-big-operator-input`. Update the controller,
 schema, Mustache templates and partials, JavaScript, CSS, tests, documentation,
 `info.json`, HTML tags, DOM IDs, CSS classes, Python identifiers, test helpers,
 and repository references accordingly.

@@ -11,8 +11,8 @@ usage() {
 Usage: scripts/update-release.sh [--push]
 
 Rebuild release from the contents and history of
-main:elements/pl-sum-notation-input. The files under
-elements/pl-sum-notation-input become the root of release, alongside
+main:elements/pl-big-operator-input. The files under
+elements/pl-big-operator-input become the root of release, alongside
 main:.gitignore; nothing else from main is kept.
 
 Options:
@@ -47,8 +47,8 @@ git rev-parse --verify --quiet "${source_branch}^{commit}" >/dev/null || {
   exit 1
 }
 
-git cat-file -e "${source_branch}:elements/pl-sum-notation-input" || {
-  printf '%s does not contain elements/pl-sum-notation-input.\n' \
+git cat-file -e "${source_branch}:elements/pl-big-operator-input" || {
+  printf '%s does not contain elements/pl-big-operator-input.\n' \
     "$source_branch" >&2
   exit 1
 }
@@ -66,7 +66,7 @@ fi
 
 old_target=$(git rev-parse --verify --quiet "refs/heads/${target_branch}" ||
   git rev-parse --verify --quiet "refs/remotes/origin/${target_branch}" || true)
-split_commit=$(git subtree split --prefix=elements/pl-sum-notation-input \
+split_commit=$(git subtree split --prefix=elements/pl-big-operator-input \
   "$source_branch")
 
 temporary_directory=$(mktemp -d)
@@ -107,7 +107,7 @@ if [[ "$target_tree" != "$actual_target_tree" ]]; then
   exit 1
 fi
 
-printf 'Updated %s to %s from %s:elements/pl-sum-notation-input.\n' \
+printf 'Updated %s to %s from %s:elements/pl-big-operator-input.\n' \
   "$target_branch" "$generated_commit" "$source_branch"
 
 if [[ "$push" == true ]]; then

@@ -1,11 +1,11 @@
-# pl-sum-notation-input
+# pl-big-operator-input
 
 This directory is a course demo of a new element.
 
 To include the element in your course, use:
 
 ```sh
-$ git submodule add -b release https://github.com/SybelBlue/pl-sum-notation-input.git elements/pl-sum-notation-input
+$ git submodule add -b release https://github.com/SybelBlue/pl-big-operator-input.git elements/pl-big-operator-input
 ```
 
 ## Developer Prerequisites

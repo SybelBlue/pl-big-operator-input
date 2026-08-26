@@ -1,24 +1,24 @@
 <div
-  class="pl-sum-notation-input flex-nowrap"
+  class="pl-big-operator-input flex-nowrap"
   aria-label="{{#integral}}Integral notation input{{/integral}}{{^integral}}Sigma notation input{{/integral}}"
 >
   {{#integral}}
     <div
-      class="pl-sum-notation-input__sigma-stack pl-sum-notation-input__integral pl-sum-notation-input__sigma-stack--integral"
+      class="pl-big-operator-input__sigma-stack pl-big-operator-input__integral pl-big-operator-input__sigma-stack--integral"
     >
-      <div class="pl-sum-notation-input__sigma" aria-hidden="true">
+      <div class="pl-big-operator-input__sigma" aria-hidden="true">
         \(\displaystyle{{{ latex_symbol }}}\)
       </div>
-      <div class="pl-sum-notation-input__limits">
+      <div class="pl-big-operator-input__limits">
         {{#lower_field}}
-          <div class="pl-sum-notation-input__lower">
-            <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
+          <div class="pl-big-operator-input__lower">
+            <span class="pl-big-operator-input__label sr-only">{{ label }}</span>
             {{> bounds-math-field }}
           </div>
         {{/lower_field}}
         {{#upper_field}}
-          <div class="pl-sum-notation-input__upper">
-            <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
+          <div class="pl-big-operator-input__upper">
+            <span class="pl-big-operator-input__label sr-only">{{ label }}</span>
             {{> bounds-math-field }}
           </div>
         {{/upper_field}}
@@ -26,29 +26,29 @@
     </div>
   {{/integral}}
   {{^integral}}
-    <div class="pl-sum-notation-input__sigma-stack pl-sum-notation-input__sum">
+    <div class="pl-big-operator-input__sigma-stack pl-big-operator-input__sum">
       {{#lower_field}}
-        <div class="pl-sum-notation-input__lower">
+        <div class="pl-big-operator-input__lower">
           {{> bounds-math-field }}
         </div>
       {{/lower_field}}
-      <div class="pl-sum-notation-input__sigma" aria-hidden="true">
+      <div class="pl-big-operator-input__sigma" aria-hidden="true">
         \(\displaystyle{{{ latex_symbol }}}\)
       </div>
       {{#upper_field}}
-        <div class="pl-sum-notation-input__upper">
+        <div class="pl-big-operator-input__upper">
           {{> bounds-math-field }}
         </div>
       {{/upper_field}}
     </div>
   {{/integral}}
   {{#summand_field}}
-    <div class="pl-sum-notation-input__summand">
-      <span class="pl-sum-notation-input__label sr-only">{{ label }}</span>
+    <div class="pl-big-operator-input__summand">
+      <span class="pl-big-operator-input__label sr-only">{{ label }}</span>
       {{> summand-math-field }}
     </div>
   {{/summand_field}}
   {{#integral}}
-    <span class="pl-sum-notation-input__differential">\(\mathrm d {{{ index_label }}}\)</span>
+    <span class="pl-big-operator-input__differential">\(\mathrm d {{{ index_label }}}\)</span>
   {{/integral}}
 </div>

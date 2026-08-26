@@ -1,5 +1,5 @@
 {{! htmlmustache-disable pl-prefer-pl-inputs }}
-<span class="pl-sum-notation-input__math-field">
+<span class="pl-big-operator-input__math-field">
   <script>
     $(function () {
       window.PLSumNotationInput("{{ answers_name }}");
@@ -21,7 +21,7 @@
     {{#prefix}}<span class="input-group-text">{{{ prefix }}}</span>{{/prefix}}
     <math-field
       id="sum-notation-input-{{ answers_name }}"
-      class="form-control pl-sum-notation-input__math-field-input{{#parse_error}} has-validation is-invalid no-validation-icon{{/parse_error}}"
+      class="form-control pl-big-operator-input__math-field-input{{#parse_error}} has-validation is-invalid no-validation-icon{{/parse_error}}"
       style="{{#centered}}text-align: center; {{/centered}}min-width: {{ size }}ch"
       {{#parse_error}}aria-invalid="true"{{/parse_error}}
       {{^editable}}contenteditable="false"{{/editable}}

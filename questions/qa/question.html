@@ -1,5 +1,5 @@
 <pl-question-panel>
-  <h2><code>pl-sum-notation-input</code> QA</h2>
+  <h2><code>pl-big-operator-input</code> QA</h2>
   <p>
     Each example exercises a different public configuration of the element. Enter
     the displayed sum or integral in the fields beneath it.
@@ -12,12 +12,12 @@
     <p>\[\displaystyle \sum_{i=1}^{6} i^2\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="default-inline"
       allow-blank="true"
       index-variable="i"
       correct-answer="Sum(i**2, (i, 1, 6))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -28,14 +28,14 @@
     <p>\[\displaystyle \sum_{k=0}^{n} (a k+b)\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="exact-server-sum"
       allow-blank="true"
       index-variable="k"
       variables="n, a, b"
       integral="false"
       grading-method="exact"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -46,7 +46,7 @@
     <p>\[\displaystyle \sum_{j=-m}^{m} (j+c)^3\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="piecewise-sum"
       allow-blank="true"
       index-variable="j"
@@ -55,7 +55,7 @@
       summand-relative-weight="5"
       weight="2"
       correct-answer="Sum((j + c)**3, (j, -m, m))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -69,13 +69,13 @@
     <p>\[\displaystyle \sum_{r=2}^{8} (r-1)\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="equivalent-sum"
       allow-blank="true"
       index-variable="r"
       grading-method="equivalent"
       correct-answer="Sum(r - 1, (r, 2, 8))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -86,13 +86,13 @@
     <p>\[\displaystyle \int_0^2 x^3\,dx\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="default-integral"
       allow-blank="true"
       index-variable="x"
       integral="true"
       correct-answer="Integral(x**3, (x, 0, 2))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -103,14 +103,14 @@
     <p>\[\displaystyle \int_a^b (t^2+c)\,dt\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="exact-server-integral"
       allow-blank="true"
       index-variable="t"
       variables="a, b, c"
       integral="true"
       grading-method="exact"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -121,7 +121,7 @@
     <p>\[\displaystyle \int_{-L}^{L} y^2\,dy\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="piecewise-integral"
       allow-blank="true"
       index-variable="y"
@@ -130,7 +130,7 @@
       grading-method="piecewise"
       summand-relative-weight="1"
       correct-answer="Integral(y**2, (y, -L, L))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -145,14 +145,14 @@
     <p>\[\displaystyle \int_0^{\pi} \sin(\theta)\,d\theta\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="greek-integral"
       allow-blank="true"
       index-variable="theta"
       integral="true"
       weight="3"
       correct-answer="Integral(sin(theta), (theta, 0, pi))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -163,12 +163,12 @@
     <p>\[\displaystyle \sum_{k=1}^{\infty} \frac{1}{k^2}\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="infinite-sum"
       allow-blank="true"
       index-variable="k"
       correct-answer="Sum(1 / k**2, (k, 1, oo))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
 
@@ -179,12 +179,12 @@
     <p>\[\displaystyle \int_0^{\infty} e^{-x}\,dx\]</p>
   </div>
   <div class="col-md-6">
-    <pl-sum-notation-input
+    <pl-big-operator-input
       answers-name="infinite-integral"
       allow-blank="true"
       index-variable="x"
       integral="true"
       correct-answer="Integral(exp(-x), (x, 0, oo))"
-    ></pl-sum-notation-input>
+    ></pl-big-operator-input>
   </div>
 </div>
