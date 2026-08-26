@@ -1,0 +1,157 @@
+.pl-sum-notation-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  vertical-align: middle;
+  margin: 0.25rem 0;
+}
+
+.pl-sum-notation-input__submission {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pl-sum-notation-input__submission-score {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pl-sum-notation-input input {
+  font-family: KaTeX_Main;
+}
+
+.pl-sum-notation-input__sigma-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  gap: 5px;
+}
+
+.pl-sum-notation-input__sigma-stack--integral {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pl-sum-notation-input__limits {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  line-height: 1;
+  gap: 1rem;
+}
+
+.pl-sum-notation-input__sum .pl-sum-notation-input__upper input {
+  text-align: center;
+}
+
+/* overrides */
+.pl-sum-notation-input .d-inline-block {
+  margin: 0 !important;
+}
+.pl-sum-notation-input math-field:nth-child(4) {
+  border-top-left-radius: var(--bs-border-radius) !important;
+  border-bottom-left-radius: var(--bs-border-radius) !important;
+}
+
+.pl-sum-notation-input math-field::part(menu-toggle) {
+  display: none;
+}
+
+.pl-sum-notation-input__upper math-field::part(virtual-keyboard-toggle),
+.pl-sum-notation-input__lower math-field::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
+.pl-sum-notation-input__upper,
+.pl-sum-notation-input__lower {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  font-size: 15pt;
+}
+
+.pl-sum-notation-input__upper > .pl-sum-notation-input__math-field,
+.pl-sum-notation-input__lower > .pl-sum-notation-input__math-field {
+  width: auto;
+}
+
+.pl-sum-notation-input__sum > .pl-sum-notation-input__upper {
+  order: 1;
+}
+
+.pl-sum-notation-input__sum > .pl-sum-notation-input__sigma {
+  order: 2;
+}
+
+.pl-sum-notation-input__sum > .pl-sum-notation-input__lower {
+  order: 3;
+}
+
+.pl-sum-notation-input__limits > .pl-sum-notation-input__upper {
+  order: 1;
+}
+
+.pl-sum-notation-input__limits > .pl-sum-notation-input__lower {
+  order: 2;
+}
+
+.pl-sum-notation-input__sigma-stack--integral .pl-sum-notation-input__upper,
+.pl-sum-notation-input__sigma-stack--integral .pl-sum-notation-input__lower {
+  width: auto;
+  justify-content: flex-start;
+}
+
+.pl-sum-notation-input__sigma {
+  font-size: 2rem;
+  line-height: 0.9;
+  font-weight: 400;
+  margin: 0.15rem 0;
+}
+
+.pl-sum-notation-input__summand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pl-sum-notation-input__differential {
+  font-size: 1.5rem;
+}
+
+.pl-sum-notation-input__label.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .pl-sum-notation-input {
+    gap: 0.6rem;
+  }
+
+  .pl-sum-notation-input__summand {
+    min-width: 10rem;
+  }
+
+  .pl-sum-notation-input__sigma {
+    font-size: 2.9rem;
+  }
+
+  .pl-sum-notation-input__differential {
+    font-size: 2rem;
+  }
+
+  .pl-sum-notation-input__sigma-stack--integral {
+    gap: 0.25rem;
+  }
+}
