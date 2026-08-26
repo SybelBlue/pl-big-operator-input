@@ -1,107 +1,67 @@
-# `pl-big-operator-input` element
+# `pl-big-operator-input`
 
-Fill in the parts of a summation or integral expression.
-
-## Sample element
-
-question.html
+This element collects an indexed big-operator expression in separate limit and body fields while storing one lossless, JSON-safe combined answer.
 
 ```html
-<pl-big-operator-input
-  answers-name="sigma1"
-  index-variable="k"
-  variables="x"
-></pl-big-operator-input>
-```
-
-server.py
-
-```python
-import sympy
-import prairielearn.sympy_utils as psu
-
-
-def generate(data):
-    k, x = sympy.symbols("k x")
-    data["correct_answers"]["sigma1"] = psu.sympy_to_json(
-        sympy.Sum(k**2 + x, (k, 1, 4))
-    )
-```
-
-This renders a sigma-style input with separate fields for the lower limit, upper limit, and summand.
-
-### Integral mode
-
-If `integral="true"`, the element switches to integral notation and appends the differential automatically.
-
-```html
-<pl-big-operator-input
-  answers-name="int1"
-  index-variable="x"
-  variables="a, b"
-  integral="true"
-></pl-big-operator-input>
+<pl-big-operator-input answers-name="total" operator="sum" index-variable="k" variables="n"></pl-big-operator-input>
 ```
 
 ```python
-def generate(data):
-    a, x = sympy.symbols("a x")
-    data["correct_answers"]["int1"] = psu.sympy_to_json(
-        sympy.Integral(x**2 + a, (x, 0, 1))
-    )
+k, n = sympy.symbols("k n")
+data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 ```
 
-## Customizations
+## Attributes
 
-Attribute | Type | Default | Description
---- | --- | --- | ---
-`answers-name` | string | — | Base answer name used for the combined sum or integral. The element also creates `-start`, `-end`, and `-summand` answer names internally.
-`index-variable` | string | — | The summation or integration variable shown in the notation. This symbol is added automatically to the summand field's allowed variables.
-`correct-answer` | string | — | Optional string representation of a bounded SymPy `Sum` or `Integral`. Takes precedence over `data["correct_answers"][answers-name]`.
-`variables` | string | `""` | Comma-delimited list of extra symbols allowed in the bounds and summand. Whitespace around commas is ignored.
-`integral` | boolean | `false` | Render integral notation instead of summation notation.
-`grading-method` | string | `equivalent` | Grading behavior: `exact`, `piecewise`, or `equivalent`.
-`weight` | integer | `1` | Weight used for the combined answer score.
-`summand-relative-weight` | positive integer | `3` | Weight of the summand relative to each bound in `piecewise` grading.
+| Attribute | Default | Meaning |
+| --- | --- | --- |
+| `answers-name` | required | Combined answer namespace. |
+| `index-variable` | required | Bound symbol; automatically allowed in the body. |
+| `operator` | `sum` | `sum`, `product`, `integral`, `limit`, `union`, `intersection`, `disjoint-union`, `and`, `or`, `min`, or `max`. |
+| `limits` | `auto` | `bounds`, `domain`, or `approach`; `auto` uses the table below. |
+| `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
+| `variables` | empty | Comma-separated extra allowed symbols. |
+| `allow-blank` | `false` | Permit a wholly blank response. |
+| `grading-method` | `equivalent` | `exact`, `component`, or `equivalent`. |
+| `body-relative-weight` | `3` | Body weight in component grading; every limit component has weight 1. |
+| `weight` | `1` | PrairieLearn score weight. |
+| `correct-answer` | unset | Optional string form of a losslessly convertible binder-aware SymPy answer. |
 
-## Grading methods
+## Operators and limits
 
-`exact` compares the complete parsed SymPy `Sum` or `Integral` object with the
-correct answer. This compares normalized symbolic objects, rather than the raw text
-entered by the student, and awards either full or zero credit.
+| Operator | LaTeX | Auto limits | Explicit limits |
+| --- | --- | --- | --- |
+| sum | `\sum` | bounds | bounds, domain |
+| product | `\prod` | bounds | bounds, domain |
+| integral | `\int` | bounds | bounds only |
+| limit | `\lim` | approach | approach only |
+| union, intersection, disjoint-union | `\bigcup`, `\bigcap`, `\bigsqcup` | domain | bounds, domain |
+| and, or | `\bigwedge`, `\bigvee` | domain | bounds, domain |
+| min, max | `\min`, `\max` | domain | bounds, domain |
 
-`piecewise` compares the lower bound, upper bound, and summand independently with
-exact SymPy equality. Each bound has weight 1 and the summand has weight
-`summand-relative-weight`, so the score is the weight of the matching components
-divided by `2 + summand-relative-weight`.
+Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<name>-domain` and `<name>-body`. Approach forms use `<name>-target` and `<name>-body`. Only fields in the selected form are created or parsed. A one-sided limit adds `-` or `+` to the target display; the public combined answer retains the descriptive direction value.
 
-`equivalent`, the default, awards full or zero credit by comparing the complete
-expression. It accepts direct equality, equality after symbolic evaluation and
-expansion, and affine reindexing of the form `k -> k + c` or `k -> -k + c`.
-Signed reversal of integral bounds is supported through the usual change of
-variables. Discrete sums do not use a generic “swap bounds and negate” shortcut;
-they must be equal under finite-sum evaluation or a valid affine reindexing.
+## Canonical answer
 
-## Rendering and badges
+Every prepared or parsed combined answer is a flat version 1 dictionary. Mathematical leaves use `sympy_to_json(..., allow_sets=True)`:
 
-In the question panel, the element renders plain-text lower- and upper-bound fields and a MathLive summand field.
+```python
+{
+    "_type": "operator_expression",
+    "_version": 1,
+    "operator": "sum",
+    "limits": "bounds",
+    "index": psu.sympy_to_json(k),
+    "lower": psu.sympy_to_json(1),
+    "upper": psu.sympy_to_json(n),
+    "body": psu.sympy_to_json(k**2),
+}
+```
 
-In the submission panel, it renders the submitted sum or integral with one combined score badge.
+Domain answers replace `lower` and `upper` with `domain`. Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
 
-## Details
+Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as author conveniences and normalized during `prepare()`. Domain forms require the dictionary. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never accepted as substitutes for it.
 
-The correct answer may be assigned in `server.py` as a bounded, one-dimensional `sympy.Sum` or `sympy.Integral`, its string representation, or a dictionary produced by `prairielearn.sympy_utils.sympy_to_json`. Its index must match `index-variable`; the element derives the correct lower bound, upper bound, and summand from that expression.
+## Grading
 
-When `index-variable` is a Greek LaTeX symbol name, the displayed notation is rendered from the normalized SymPy symbol so the label stays correct while the internal symbolic input still accepts the corresponding typed variable name without requiring the formula editor.
-
-The controller stores only the combined expression in `data["correct_answers"][answers-name]`, normalized to a JSON-serializable PrairieLearn SymPy dictionary. The namespaced field names such as `sigma1-start` are derived as needed and are not added to `correct_answers`.
-
-During parsing, the nested child inputs are also written back to `data["submitted_answers"]` in PrairieLearn JSON form.
-
-## Example implementations
-
-* `questions/reviewed/ch5-integration/q5-56/question.html`
-
-## See also
-
-* `pl-symbolic-input` for the internal math-expression inputs used by this element
+`exact` requires an identical canonical operator, form, direction, index, and exact SymPy components. `component` compares visible components independently. `equivalent` constructs binder-aware Sum, Product, Integral, or Limit objects where possible. Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly. Bounded forms of variadic operators have no faithful SymPy binder and are likewise reported as unsupported for equivalent grading; use `exact` or `component` for those forms.

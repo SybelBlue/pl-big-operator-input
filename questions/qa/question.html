@@ -1,190 +1,25 @@
 <pl-question-panel>
-  <h2><code>pl-big-operator-input</code> QA</h2>
-  <p>
-    Each example exercises a different public configuration of the element. Enter
-    the displayed sum or integral in the fields beneath it.
-  </p>
+    <h2><code>pl-big-operator-input</code> examples</h2>
 </pl-question-panel>
-
-<h3>1. Defaults and inline correct answer</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \sum_{i=1}^{6} i^2\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="default-inline"
-      allow-blank="true"
-      index-variable="i"
-      correct-answer="Sum(i**2, (i, 1, 6))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>2. Explicit sum mode, exact grading, server answer, and variables</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \sum_{k=0}^{n} (a k+b)\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="exact-server-sum"
-      allow-blank="true"
-      index-variable="k"
-      variables="n, a, b"
-      integral="false"
-      grading-method="exact"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>3. Piecewise grading and custom component/element weights</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \sum_{j=-m}^{m} (j+c)^3\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="piecewise-sum"
-      allow-blank="true"
-      index-variable="j"
-      variables="m, c"
-      grading-method="piecewise"
-      summand-relative-weight="5"
-      weight="2"
-      correct-answer="Sum((j + c)**3, (j, -m, m))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>4. Equivalent grading (explicit)</h3>
-<p class="text-muted">
-  This configuration also accepts an equivalent affine reindexing.
-</p>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \sum_{r=2}^{8} (r-1)\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="equivalent-sum"
-      allow-blank="true"
-      index-variable="r"
-      grading-method="equivalent"
-      correct-answer="Sum(r - 1, (r, 2, 8))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>5. Integral mode with an inline correct answer</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \int_0^2 x^3\,dx\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="default-integral"
-      allow-blank="true"
-      index-variable="x"
-      integral="true"
-      correct-answer="Integral(x**3, (x, 0, 2))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>6. Integral mode, exact grading, server answer, and variables</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \int_a^b (t^2+c)\,dt\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="exact-server-integral"
-      allow-blank="true"
-      index-variable="t"
-      variables="a, b, c"
-      integral="true"
-      grading-method="exact"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>7. Integral mode with piecewise grading</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \int_{-L}^{L} y^2\,dy\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="piecewise-integral"
-      allow-blank="true"
-      index-variable="y"
-      variables="L"
-      integral="true"
-      grading-method="piecewise"
-      summand-relative-weight="1"
-      correct-answer="Integral(y**2, (y, -L, L))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>8. Greek index, trigonometric input, and answer precedence</h3>
-<p class="text-muted">
-  The inline answer should take precedence over the deliberately different server
-  answer.
-</p>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \int_0^{\pi} \sin(\theta)\,d\theta\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="greek-integral"
-      allow-blank="true"
-      index-variable="theta"
-      integral="true"
-      weight="3"
-      correct-answer="Integral(sin(theta), (theta, 0, pi))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>9. Infinite sum</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \sum_{k=1}^{\infty} \frac{1}{k^2}\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="infinite-sum"
-      allow-blank="true"
-      index-variable="k"
-      correct-answer="Sum(1 / k**2, (k, 1, oo))"
-    ></pl-big-operator-input>
-  </div>
-</div>
-
-<hr />
-<h3>10. Improper integral</h3>
-<div class="row align-items-center">
-  <div class="col-md-6">
-    <p>\[\displaystyle \int_0^{\infty} e^{-x}\,dx\]</p>
-  </div>
-  <div class="col-md-6">
-    <pl-big-operator-input
-      answers-name="infinite-integral"
-      allow-blank="true"
-      index-variable="x"
-      integral="true"
-      correct-answer="Integral(exp(-x), (x, 0, oo))"
-    ></pl-big-operator-input>
-  </div>
-</div>
+<p>Bounded sum:</p>
+<pl-big-operator-input answers-name="sum" operator="sum" index-variable="k"></pl-big-operator-input>
+<p>Bounded product:</p>
+<pl-big-operator-input answers-name="product" operator="product" index-variable="k"></pl-big-operator-input>
+<p>Integral:</p>
+<pl-big-operator-input answers-name="integral" operator="integral" index-variable="x"></pl-big-operator-input>
+<p>Right-hand limit:</p>
+<pl-big-operator-input
+    answers-name="limit"
+    operator="limit"
+    index-variable="x"
+    limit-direction="from-right"
+></pl-big-operator-input>
+<p>Domain-indexed union:</p>
+<pl-big-operator-input
+    answers-name="union"
+    operator="union"
+    index-variable="k"
+    grading-method="exact"
+></pl-big-operator-input>
+<p>Domain-indexed conjunction:</p>
+<pl-big-operator-input answers-name="and" operator="and" index-variable="k" grading-method="exact"></pl-big-operator-input>

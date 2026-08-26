@@ -1,9 +1,9 @@
 (() => {
   /** Initialize a MathLive field and synchronize its PrairieLearn submission inputs. */
-  window.PLSumNotationInput = function (name) {
-    const mathField = document.getElementById(`sum-notation-input-${name}`);
-    const submissionInput = document.getElementById(`sum-notation-input-sub-${name}`);
-    const latexInput = document.getElementById(`sum-notation-input-latex-${name}`);
+  window.PLBigOperatorInput = function (name) {
+    const mathField = document.getElementById(`big-operator-input-${name}`);
+    const submissionInput = document.getElementById(`big-operator-input-sub-${name}`);
+    const latexInput = document.getElementById(`big-operator-input-latex-${name}`);
 
     if (!mathField || !submissionInput || !latexInput || mathField.dataset.initialized) return;
     mathField.dataset.initialized = 'true';
