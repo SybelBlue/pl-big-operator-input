@@ -120,6 +120,20 @@ def test_prepare_normalizes_binders(operator, correct):
 
 
 @pytest.mark.parametrize(
+    "operator,correct",
+    [
+        ("sum", sympy.Sum(sympy.Symbol("k") ** 2, (sympy.Symbol("k"), 1, 4))),
+        ("product", sympy.Product(sympy.Symbol("k"), (sympy.Symbol("k"), 1, 4))),
+        ("integral", sympy.Integral(sympy.Symbol("k"), (sympy.Symbol("k"), 0, 1))),
+    ],
+)
+def test_prepare_decodes_serialized_binders_without_interval_parsing(operator, correct):
+    state = data(mod.psu.sympy_to_json(correct))
+    mod.prepare(html(operator=operator), state)
+    assert state["correct_answers"]["op"]["operator"] == operator
+
+
+@pytest.mark.parametrize(
     "direction,sympy_direction",
     [("two-sided", "+-"), ("from-left", "-"), ("from-right", "+")],
 )
@@ -133,6 +147,11 @@ def test_limit_directions(direction, sympy_direction):
     )
     assert 'name="op-target"' in rendered and 'name="op-body"' in rendered
     assert "Approach target" in rendered and "Operator body" in rendered
+    if direction == "two-sided":
+        assert "pl-big-operator-input__suffix" not in rendered
+    else:
+        assert 'class="input-group-text pl-big-operator-input__suffix"' in rendered
+        assert ("−" if direction == "from-left" else "+") in rendered
 
 
 def canonical(operator="union", limits="domain"):
@@ -242,3 +261,31 @@ def test_integral_and_submission_reconstruct_complete_notation():
     rendered = mod.render(markup, state)
     assert r"\int_{0}^{1} k^2\,\mathrm{d}k" in rendered
     assert rendered.count("badge") == 1
+
+
+def test_integral_bounds_use_a_column_between_operator_and_body():
+    rendered = mod.render(html(operator="integral"), data())
+    assert "pl-big-operator-input__operator-stack--integral" in rendered
+    operator_position = rendered.index('pl-big-operator-input__operator"')
+    limits_position = rendered.index('pl-big-operator-input__limits"')
+    body_position = rendered.index('pl-big-operator-input__body"')
+    assert operator_position < limits_position < body_position
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    assert "operator-stack--integral {\n  flex-direction: row" in css
+    assert ".pl-big-operator-input__limits {" in css
+    assert "flex-direction: column" in css
+    assert ".pl-big-operator-input__limits > .pl-big-operator-input__upper" in css
+    assert ".pl-big-operator-input__limits > .pl-big-operator-input__lower" in css
+
+
+@pytest.mark.parametrize("operator", ["union", "limit"])
+def test_annotated_operator_stack_has_vertical_offset(operator):
+    rendered = mod.render(html(operator=operator), data())
+    assert "pl-big-operator-input__operator-stack--annotated" in rendered
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    assert ".pl-big-operator-input__operator-stack--annotated" in css
+    assert "margin-top: 1.5rem" in css
+    assert (
+        ".pl-big-operator-input__annotation math-field::part(virtual-keyboard-toggle)"
+        in css
+    )

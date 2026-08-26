@@ -117,7 +117,21 @@ def _config(html: str) -> Config:
 
 def _decode(value: Any) -> Any:
     if isinstance(value, dict) and value.get("_type") == "sympy" and "_value" in value:
-        return psu.json_to_sympy(cast(Any, value), allow_sets=True)
+        source = value["_value"]
+        if isinstance(source, str):
+            # Canonical leaves are trusted author answers. PrairieLearn's
+            # student-input parser cannot round-trip every value emitted by
+            # sympy_to_json: binder tuples look like intervals, and Boolean
+            # relations are rejected by its expression allowlist.
+            if (
+                source.lstrip().startswith(("{", "["))
+                or " ∪ " in source
+                or " ∩ " in source
+            ):
+                return psu.json_to_sympy(cast(Any, value), allow_sets=True)
+            return sympy.sympify(  # type: ignore[call-overload]
+                source, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
+            )
     if isinstance(value, str):
         try:
             return sympy.sympify(  # type: ignore[call-overload]
@@ -235,6 +249,7 @@ def _field(
     size: int,
     data: dict[str, Any],
     prefix: str | None = None,
+    suffix: str | None = None,
 ) -> dict[str, Any]:
     name = config.name(component)
     raw = data.get("raw_submitted_answers", {})
@@ -243,6 +258,7 @@ def _field(
         "label": label,
         "size": size,
         "prefix": prefix,
+        "suffix": suffix,
         "editable": data.get("panel", "question") == "question",
         "raw_submitted_answer": raw.get(name, ""),
         "raw_submitted_answer_latex": raw.get(f"{name}-latex", ""),
@@ -258,9 +274,6 @@ def _question(config: Config, data: dict[str, Any]) -> str:
         "integral": config.operator == "integral",
         "operator_latex": OPS[config.operator][0],
         "index_label": index,
-        "direction_latex": {"two-sided": "", "from-left": "^-", "from-right": "^+"}[
-            config.direction
-        ],
         "body_field": _field(config, "body", "Operator body", 20, data),
     }
     if config.limits == "bounds":
@@ -278,8 +291,15 @@ def _question(config: Config, data: dict[str, Any]) -> str:
             config, "domain", "Index domain", 10, data, rf"\({index} \in \)"
         )
     else:
+        dir = {"two-sided": None, "from-left": "−", "from-right": "+"}[config.direction]
         context["annotation_field"] = _field(
-            config, "target", "Approach target", 10, data, rf"\({index} \to \)"
+            config,
+            "target",
+            "Approach target",
+            10,
+            data,
+            rf"\({index} \to \)",
+            dir and rf"\({{}}^{dir}\)",
         )
     return chevron.render(
         (HERE / "pl-big-operator-input.mustache").read_text(),

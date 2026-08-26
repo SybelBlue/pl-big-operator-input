@@ -30,6 +30,17 @@
   gap: 5px;
 }
 
+.pl-big-operator-input__operator-stack--annotated {
+  /* Balance the annotation below the operator so the glyph aligns with the body. */
+  margin-top: 1.5rem;
+}
+
+.pl-big-operator-input__annotation {
+  display: inline-flex;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
 .pl-big-operator-input__operator-stack--integral {
   flex-direction: row;
   align-items: center;
@@ -63,7 +74,8 @@
 }
 
 .pl-big-operator-input__upper math-field::part(virtual-keyboard-toggle),
-.pl-big-operator-input__lower math-field::part(virtual-keyboard-toggle) {
+.pl-big-operator-input__lower math-field::part(virtual-keyboard-toggle),
+.pl-big-operator-input__annotation math-field::part(virtual-keyboard-toggle) {
   display: none;
 }
 
@@ -154,4 +166,5 @@
   .pl-big-operator-input__operator-stack--integral {
     gap: 0.25rem;
   }
+
 }
