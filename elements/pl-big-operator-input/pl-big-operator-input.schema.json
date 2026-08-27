@@ -51,6 +51,10 @@
       "default": "false",
       "enum": ["true", "false"]
     },
+    "allow-complex": {
+      "default": "false",
+      "enum": ["true", "false"]
+    },
     "grading-method": {
       "default": "equivalent",
       "enum": [
