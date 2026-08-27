@@ -317,7 +317,7 @@ def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, 
             raise TypeError(
                 f'Correct answer component "{component}" must be a SymPy value or parseable string.'
             )
-        if _requires_set(config, component) and not isinstance(parsed, sympy.Set):
+        if _requires_set(config, component) and not _is_set_input(parsed):
             raise ValueError(f'Correct answer component "{component}" must be a set.')
         values[component] = parsed
     return _canonical(config, values)

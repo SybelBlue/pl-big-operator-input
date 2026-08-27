@@ -27,6 +27,7 @@
                         answers-name="sum"
                         operator="sum"
                         index-variable="k"
+                        correct-answer="Sum(k**2, (k, 1, 4))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -44,6 +45,7 @@
                         answers-name="product"
                         operator="product"
                         index-variable="k"
+                        correct-answer="Product(k, (k, 1, 4))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -61,6 +63,7 @@
                         answers-name="integral"
                         operator="integral"
                         index-variable="x"
+                        correct-answer="Integral(x**2, (x, 0, 1))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -81,6 +84,8 @@
                         index-variable="z"
                         variables="Gamma"
                         grading-method="exact"
+                        correct-answer-domain="Gamma"
+                        correct-answer-body="z"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -98,6 +103,8 @@
                         answers-name="min"
                         operator="min"
                         index-variable="x"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="x^2"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -115,6 +122,8 @@
                         answers-name="max"
                         operator="max"
                         index-variable="x"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="x^2"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -133,6 +142,8 @@
                         operator="union"
                         index-variable="k"
                         grading-method="exact"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="{k}"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -151,6 +162,8 @@
                         operator="intersection"
                         index-variable="k"
                         grading-method="exact"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="{k}"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -169,6 +182,8 @@
                         operator="and"
                         index-variable="k"
                         grading-method="exact"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="k"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -187,6 +202,8 @@
                         operator="or"
                         index-variable="k"
                         grading-method="exact"
+                        correct-answer-domain="{1, 2}"
+                        correct-answer-body="k"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -205,6 +222,7 @@
                         operator="limit"
                         index-variable="x"
                         limit-direction="from-right"
+                        correct-answer="Limit(sin(x) / x, x, 0, dir='+')"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>

@@ -240,6 +240,26 @@ def test_prepare_parses_set_component_correct_answer_strings():
     }
 
 
+def test_prepare_accepts_symbolic_integral_domain():
+    state = data(panel="answer")
+    markup = html(
+        operator="integral",
+        limits="domain",
+        variables="Gamma",
+        **{"correct-answer-domain": "Gamma", "correct-answer-body": "k"},
+    )
+
+    mod.prepare(markup, state)
+    rendered = mod.render(markup, state)
+
+    values = mod._values(mod._config(markup), state["correct_answers"]["op"])
+    assert values == {
+        "domain": sympy.Symbol("Gamma"),
+        "body": sympy.Symbol("k"),
+    }
+    assert r"\Gamma" in rendered
+
+
 def test_prepare_component_correct_answer_requires_every_visible_attribute():
     with pytest.raises(ValueError, match="missing correct-answer-end"):
         mod.prepare(
