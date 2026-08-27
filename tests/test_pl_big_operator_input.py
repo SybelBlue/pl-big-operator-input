@@ -118,6 +118,54 @@ def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
 
 
 @pytest.mark.parametrize(
+    "operator,function_name",
+    [
+        ("sum", "Sum"),
+        ("product", "Product"),
+        ("integral", "Integral"),
+        ("union", "Union"),
+        ("intersection", "Intersection"),
+        ("disjoint-union", "DisjointUnion"),
+        ("and", "And"),
+        ("or", "Or"),
+        ("min", "Min"),
+        ("max", "Max"),
+        ("custom", "Custom"),
+    ],
+)
+def test_sympy_string_forms_are_parseable(operator, function_name):
+    k = sympy.Symbol("k")
+    if operator == "sum":
+        correct = sympy.Sum(k**2, (k, 1, 4))
+    elif operator == "product":
+        correct = sympy.Product(k**2, (k, 1, 4))
+    elif operator == "integral":
+        correct = sympy.Integral(k**2, (k, 1, 4))
+    else:
+        correct = sympy.Function(function_name)(k**2, (k, 1, 4))
+    attributes = {"correct-answer": str(correct), "index-variable": None}
+    if operator == "custom":
+        attributes.update({"operator-latex": r"\star", "grading-method": "component"})
+    state = data()
+
+    mod.prepare(html(**attributes), state)
+
+    assert state["correct_answers"]["op"]["operator"] == operator
+
+
+def test_sympy_limit_string_form_is_parseable():
+    k = sympy.Symbol("k")
+    correct = sympy.Limit(sympy.sin(k) / k, k, 0, dir="+")  # type: ignore
+    state = data()
+
+    mod.prepare(html(**{"correct-answer": str(correct), "index-variable": None}), state)
+
+    answer = state["correct_answers"]["op"]
+    assert answer["operator"] == "limit"
+    assert answer["direction"] == "from-right"
+
+
+@pytest.mark.parametrize(
     "operator,correct",
     [
         ("sum", sympy.Sum(sympy.Symbol("k") ** 2, (sympy.Symbol("k"), 1, 4))),
