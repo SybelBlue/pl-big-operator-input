@@ -15,8 +15,12 @@ and license are recorded alongside the vendor directory in
 
 ```python
 k, n = sympy.symbols("k n")
-data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
+data["correct_answers"]["total"] = str(sympy.Sum(k**2, (k, 1, n)))
 ```
+
+Answers assigned in `server.py` must be JSON-serializable. In particular, do
+not assign a raw SymPy object to `data`; convert binder-aware expressions to a
+string as above, or serialize them with `prairielearn.sympy_utils.sympy_to_json`.
 
 ## Attributes
 
@@ -41,16 +45,20 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 
 | Operator | LaTeX | Auto limits | Explicit limits |
 | --- | --- | --- | --- |
-| sum | `\sum` | bounds | bounds, domain |
-| product | `\prod` | bounds | bounds, domain |
-| integral | `\int` | bounds | bounds, domain |
-| limit | `\lim` | approach | approach only |
-| union, intersection, disjoint-union | `\bigcup`, `\bigcap`, `\bigsqcup` | domain | bounds, domain |
-| and, or | `\bigwedge`, `\bigvee` | domain | bounds, domain |
-| min, max | `\min`, `\max` | domain | bounds, domain |
-| custom | `operator-latex` | none | bounds, domain |
+| sum | $\sum$ | bounds | bounds, domain |
+| product | $\prod$ | bounds | bounds, domain |
+| integral | $\int$ | bounds | bounds, domain |
+| limit | $\lim$ | approach | approach only |
+| union, intersection, disjoint-union | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain | bounds, domain |
+| and, or | $\bigwedge$, $\bigvee$ | domain | bounds, domain |
+| min, max | $\min$, $\max$ | domain | bounds, domain |
+| custom | --- | none | bounds, domain |
 
-Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<name>-domain` and `<name>-body`. Approach forms use `<name>-target` and `<name>-body`. Only fields in the selected form are created or parsed. A one-sided limit adds `-` or `+` to the target display; the public combined answer retains the descriptive direction value.
+Bounds forms collect a lower bound, an upper bound, and a body. Domain forms
+collect a domain and a body, while approach forms collect a target and a body.
+The element displays and parses only the inputs required by the selected form.
+For a one-sided limit, the target is displayed with a `-` or `+`; the combined
+answer records the corresponding descriptive direction.
 
 Custom operators require an explicit `limits="bounds"` or `limits="domain"`
 because there is no meaningful automatic form. They are ungraded when no correct
@@ -78,6 +86,7 @@ For an integral with `limits="domain"`, the domain is rendered as the sole subsc
 Every prepared or parsed combined answer is a flat version 1 dictionary. Mathematical leaves use `sympy_to_json(..., allow_sets=True)`:
 
 ```python
+# canonical JSON repr of \sum_{k=1}^n k^2
 {
     "_type": "operator_expression",
     "_version": 1,
@@ -90,14 +99,16 @@ Every prepared or parsed combined answer is a flat version 1 dictionary. Mathema
 }
 ```
 
-Domain answers replace `lower` and `upper` with `domain`. Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
-Custom submissions use the same form-dependent components and add
-`"operator_latex"`; built-in answers do not include that key.
+- Rnage answers use `lower` and `upper`, as seen above.
+- Domain answers replace `lower` and `upper` with `domain`.
+- Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
+- Custom submissions use the same form-dependent components and add `"operator_latex"`; built-in answers do not include that key.
 
 Authors may instead provide the visible components as attributes. Each value is
 accepted by the same basic parser used for student input:
 
 ```html
+<!-- html repr of \sum_{k=1}^n k^2 -->
 <pl-big-operator-input
   answers-name="total"
   operator="sum"
@@ -118,7 +129,13 @@ the values to the canonical representation during `prepare()`. The index
 variable is automatically available when parsing the body; other symbols must
 be listed in `variables`.
 
-Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as author conveniences and normalized during `prepare()`. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never accepted as substitutes for it.
+String or `sympy_to_json` representations of bounded `sympy.Sum`,
+`sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as
+author conveniences and normalized during `prepare()`. Do not put the raw
+SymPy objects in `data`, because PrairieLearn question data must remain
+JSON-serializable. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`,
+`And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never
+accepted as substitutes for it.
 
 The variadic operators also accept an inert function-style author answer that
 preserves the binder, using `(index, domain)` or `(index, lower, upper)` as the
