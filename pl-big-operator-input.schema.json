@@ -9,17 +9,29 @@
       "description": "Big operator to display and use when constructing the combined answer. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "enum": [
         "sum",
+        "Sum",
         "product",
+        "Product",
         "integral",
+        "Integral",
         "limit",
+        "Limit",
         "union",
+        "Union",
         "intersection",
+        "Intersection",
         "disjoint-union",
+        "Disjoint-union",
         "and",
+        "And",
         "or",
+        "Or",
         "min",
+        "Min",
         "max",
-        "custom"
+        "Max",
+        "custom",
+        "Custom"
       ]
     },
     "operator-latex": {
@@ -37,7 +49,7 @@
       ]
     },
     "index-variable": {
-      "description": "Bound variable used by the operator and automatically allowed in the body expression.",
+      "description": "Bound variable used by the operator and automatically allowed in the body expression. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "type": "string"
     },
     "variables": {
@@ -115,7 +127,6 @@
     }
   },
   "required": [
-    "answers-name",
-    "index-variable"
+    "answers-name"
   ]
 }

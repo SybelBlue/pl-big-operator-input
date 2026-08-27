@@ -19,7 +19,9 @@ SPEC.loader.exec_module(mod)
 
 def html(**attrs):
     values = {"answers-name": "op", "index-variable": "k", **attrs}
-    text = " ".join(f'{key}="{value}"' for key, value in values.items())
+    text = " ".join(
+        f'{key}="{value}"' for key, value in values.items() if value is not None
+    )
     return f"<pl-big-operator-input {text}></pl-big-operator-input>"
 
 
@@ -56,6 +58,39 @@ def test_auto_limits(operator, limits):
 
 
 @pytest.mark.parametrize(
+    "operator",
+    [
+        "Sum",
+        "Product",
+        "Integral",
+        "Limit",
+        "Union",
+        "Intersection",
+        "Disjoint-union",
+        "And",
+        "Or",
+        "Min",
+        "Max",
+    ],
+)
+def test_operator_attribute_accepts_initial_capital(operator):
+    config = mod._config(html(operator=operator))
+    assert config.operator == operator[:1].lower() + operator[1:]
+
+
+def test_custom_operator_attribute_accepts_initial_capital():
+    config = mod._config(
+        html(operator="Custom", limits="bounds", **{"operator-latex": r"\star"})
+    )
+    assert config.operator == "custom"
+
+
+def test_operator_attribute_rejects_other_capitalization():
+    with pytest.raises(ValueError, match='Unknown operator "sUM"'):
+        mod._config(html(operator="SUM"))
+
+
+@pytest.mark.parametrize(
     "operator,correct,limits",
     [
         ("sum", "Sum(k**2, (k, 1, 4))", "bounds"),
@@ -72,11 +107,12 @@ def test_auto_limits(operator, limits):
     ],
 )
 def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
-    markup = html(**{"correct-answer": correct})
+    markup = html(**{"correct-answer": correct, "index-variable": None})
     state = data()
     mod.prepare(markup, state)
     assert state["correct_answers"]["op"]["operator"] == operator
     assert state["correct_answers"]["op"]["limits"] == limits
+    assert mod._config(markup, state).index == "k"
     assert mod._config(markup, state).operator == operator
     assert mod.OPS[operator][0] in mod.render(markup, state)
 
@@ -100,14 +136,33 @@ def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
 )
 def test_infers_operator_from_sympy_json(operator, correct):
     state = data(mod.psu.sympy_to_json(correct))
-    mod.prepare(html(), state)
+    mod.prepare(html(**{"index-variable": None}), state)
     assert state["correct_answers"]["op"]["operator"] == operator
+    assert mod._config(html(**{"index-variable": None}), state).index == "k"
 
 
 def test_infers_operator_from_canonical_dictionary():
     state = data(canonical())
-    mod.prepare(html(), state)
+    mod.prepare(html(**{"index-variable": None}), state)
     assert state["correct_answers"]["op"]["operator"] == "union"
+    assert mod._config(html(**{"index-variable": None}), state).index == "k"
+
+
+def test_omitted_index_requires_inferable_whole_answer():
+    with pytest.raises(ValueError, match='"index-variable" attribute is required'):
+        mod._config(html(operator="sum", **{"index-variable": None}))
+    with pytest.raises(ValueError, match='"index-variable" attribute is required'):
+        mod._config(
+            html(
+                operator="sum",
+                **{
+                    "index-variable": None,
+                    "correct-answer-start": "1",
+                    "correct-answer-end": "4",
+                    "correct-answer-body": "k",
+                },
+            )
+        )
 
 
 def test_omitted_operator_requires_inferable_whole_answer():
@@ -164,15 +219,36 @@ def test_inferred_operator_validates_explicit_limits():
 
 
 def test_inferred_limit_validates_and_preserves_direction():
-    markup = html(
-        **{
-            "correct-answer": "Limit(sin(k) / k, (k, 0, '+'))",
-            "limit-direction": "from-right",
-        },
-    )
+    markup = html(**{"correct-answer": "Limit(sin(k) / k, (k, 0, '+'))"})
     state = data()
     mod.prepare(markup, state)
     assert state["correct_answers"]["op"]["direction"] == "from-right"
+
+
+def test_limit_infers_index_and_direction_from_whole_answer():
+    markup = """<pl-big-operator-input
+        answers-name="op"
+        correct-answer="Limit(sin(x) / x, (x, 0, '+'))"
+        allow-blank="true"
+    ></pl-big-operator-input>"""
+    state = data()
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    assert mod._decode(answer["index"]) == sympy.Symbol("x")
+    assert answer["direction"] == "from-right"
+
+
+def test_explicit_limit_direction_still_rejects_mismatch():
+    markup = html(
+        **{
+            "correct-answer": "Limit(k, (k, 0, '+'))",
+            "limit-direction": "from-left",
+        }
+    )
+    with pytest.raises(ValueError, match="does not match limit-direction"):
+        mod.prepare(markup, data())
 
 
 @pytest.mark.parametrize(
@@ -1030,7 +1106,7 @@ def test_operator_latex_implies_custom_operator_for_whole_answer():
             "operator-latex": r"{ \Huge\bigstar{} }",
             "grading-method": "component",
             "correct-answer": "Custom(j**2, (j, 1, 4))",
-            "index-variable": "j",
+            "index-variable": None,
         },
     )
     state = data()
@@ -1041,6 +1117,7 @@ def test_operator_latex_implies_custom_operator_for_whole_answer():
     values = mod._values(mod._config(markup, state), answer)
     assert answer["operator"] == "custom"
     assert answer["operator_latex"] == r"{ \Huge\bigstar{} }"
+    assert mod._config(markup, state).index == "j"
     assert values == {
         "lower": sympy.Integer(1),
         "upper": sympy.Integer(4),

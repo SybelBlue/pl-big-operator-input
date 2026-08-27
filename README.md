@@ -13,7 +13,6 @@ and license are recorded alongside the vendor directory in
 <pl-big-operator-input
   answers-name="total"
   correct-answer="Sum(k**2, (k, 1, n))"
-  index-variable="k"
   variables="n"
 ></pl-big-operator-input>
 ```
@@ -29,8 +28,8 @@ inconvenient.
 | Attribute                                                                                                             | Default      | Meaning                                                                                                                                          |
 | --------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `answers-name`                                                                                                        | required     | Combined answer namespace.                                                                                                                       |
-| `index-variable`                                                                                                      | required     | Bound symbol; automatically allowed in the body.                                                                                                 |
-| `operator`                                                                                                            | inferred     | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
+| `index-variable`                                                                                                      | inferred     | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                       |
+| `operator`                                                                                                            | inferred     | A built-in operator, or `custom` for a custom LaTeX operator. The first letter is case-insensitive. When omitted, a whole string/dictionary correct answer must identify the operator. |
 | `operator-latex`                                                                                                      | unset        | Custom operator LaTeX. When supplied without `operator`, it implies `operator="custom"`; invalid for built-in operators.                         |
 | `limits`                                                                                                              | `auto`       | `bounds`, `domain`, or `approach`; `auto` uses the table below.                                                                                  |
 | `limit-direction`                                                                                                     | `two-sided`  | `two-sided`, `from-left`, or `from-right` for limits.                                                                                            |
@@ -138,8 +137,9 @@ A domain integral can therefore omit both the operator and limits attributes:
 
 A limit uses the parseable form `Limit(body, (index, target, direction))`.
 Valid direction strings are `"+"` (from the right), `"-"` (from the left), and
-`"+-"` (two-sided). For example, the operator, approach layout, and default
-`limit-direction="two-sided"` are inferred here:
+`"+-"` (two-sided). When `limit-direction` is omitted, it is inferred from this
+value; an explicit attribute must agree. For example, the operator, approach
+layout, and two-sided direction are all inferred here:
 
 ```html
 <pl-big-operator-input
@@ -158,11 +158,15 @@ data["correct_answers"]["total"] = str(sympy.Product(k + 1, (k, 1, 4)))
 ```
 
 A canonical structured dictionary, in the format below, is another inferable
-answer source because it includes `"operator"`. An explicit HTML `operator`
-always takes precedence and is checked against the answer. Component
+answer source because it includes `"operator"` and `"index"`. Whole answer
+strings and SymPy JSON also identify their bound symbol, so `index-variable`
+can be omitted for these parseable forms. Explicit HTML `operator` and
+`index-variable` values always take precedence and are checked against the
+answer. Component
 `correct-answer-...` attributes and raw SymPy objects do not trigger inference,
-so they require an explicit `operator`. Ungraded elements and custom, malformed,
-or otherwise unrecognized answers likewise require an explicit `operator`.
+so they require an explicit `operator` and `index-variable`. Ungraded,
+malformed, or otherwise unrecognized answers likewise require explicit
+configuration.
 
 Answers assigned in `server.py` must be JSON-serializable. Do not assign a raw
 SymPy object to `data`; convert supported expressions to a string or use
