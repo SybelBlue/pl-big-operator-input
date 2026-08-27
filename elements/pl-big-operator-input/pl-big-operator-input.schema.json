@@ -39,7 +39,7 @@
       "type": "string"
     },
     "limits": {
-      "description": "Layout of the operator limits. Auto infers the layout from a parseable whole correct answer when available, otherwise selects the built-in operator's default layout; custom operators require an explicit bounds, domain, or approach form.",
+      "description": "Layout of the operator limits. Auto infers the layout from a parseable whole correct answer when available, otherwise selects the built-in operator's default layout; custom operators without a whole answer require an explicit bounds, domain, or approach form.",
       "default": "auto",
       "enum": [
         "auto",

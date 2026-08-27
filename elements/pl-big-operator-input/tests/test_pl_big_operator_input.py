@@ -347,7 +347,7 @@ def test_custom_operator_requires_explicit_supported_limits(limits):
 
 
 def test_custom_operator_rejects_auto_limits():
-    with pytest.raises(ValueError, match="require explicit"):
+    with pytest.raises(ValueError, match="explicit limits"):
         mod.prepare(html(operator="custom", **{"operator-latex": r"\star"}), data())
 
 
@@ -1101,7 +1101,6 @@ def test_custom_operator_component_grading():
 
 def test_operator_latex_implies_custom_operator_for_whole_answer():
     markup = html(
-        limits="bounds",
         **{
             "operator-latex": r"{ \Huge\bigstar{} }",
             "grading-method": "component",
@@ -1127,7 +1126,6 @@ def test_operator_latex_implies_custom_operator_for_whole_answer():
 
 def test_custom_operator_accepts_approach_syntax():
     markup = html(
-        limits="approach",
         **{
             "operator-latex": r"\operatorname{eval}",
             "limit-direction": "from-left",

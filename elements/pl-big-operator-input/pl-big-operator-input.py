@@ -191,6 +191,15 @@ def _formatted_call(source: str, function_name: str) -> tuple[str, list[str]] | 
     return arguments[0], limits
 
 
+def _formatted_direction(limits: list[str]) -> str | None:
+    if len(limits) != 3:
+        return None
+    source = limits[2].strip()
+    if len(source) < 2 or source[0] not in {"'", '"'} or source[-1] != source[0]:
+        return None
+    return source[1:-1]
+
+
 def _symbol_name(value: Any) -> str | None:
     return str(value) if isinstance(value, sympy.Symbol) else None
 
@@ -217,7 +226,7 @@ def _infer_spec(
         )
         if parsed_operator is None:
             return None, None, None
-        operator = parsed_operator if parsed_operator != "custom" else None
+        operator = parsed_operator
         formatted = _formatted_call(raw, OPERATOR_FUNCTIONS[parsed_operator])
         if formatted is not None:
             try:
@@ -230,7 +239,13 @@ def _infer_spec(
             if limit_count == 2:
                 return operator, "domain", index
             if limit_count == 3:
-                return operator, "bounds", index
+                return (
+                    operator,
+                    "approach"
+                    if _formatted_direction(formatted[1]) is not None
+                    else "bounds",
+                    index,
+                )
             return operator, None, index
         try:
             value = _decode(raw)
@@ -290,14 +305,10 @@ def _infer_direction(raw: Any, operator: str) -> str | None:
     formatted = _formatted_call(raw, function_name)
     if formatted is None or len(formatted[1]) != 3:
         return None
-    direction_source = formatted[1][2].strip()
-    if (
-        len(direction_source) < 2
-        or direction_source[0] not in {"'", '"'}
-        or direction_source[-1] != direction_source[0]
-    ):
+    direction = _formatted_direction(formatted[1])
+    if direction is None:
         return None
-    return {value: key for key, value in DIRECTIONS.items()}.get(direction_source[1:-1])
+    return {value: key for key, value in DIRECTIONS.items()}.get(direction)
 
 
 def _config(html: str, data: Any | None = None) -> Config:
@@ -354,16 +365,15 @@ def _config(html: str, data: Any | None = None) -> Config:
             )
         operator_latex = OPS[operator][0]
     limits = pl.get_string_attrib(element, "limits", "auto") or "auto"
-    if operator == "custom" and limits == "auto":
-        raise ValueError(
-            'Custom operators require explicit limits="bounds", limits="domain", or limits="approach".'
-        )
     if limits == "auto":
-        limits = (
-            inferred_limits
-            if inferred_operator == operator and inferred_limits
-            else OPS[operator][1]
-        )
+        if inferred_operator == operator and inferred_limits:
+            limits = inferred_limits
+        elif operator == "custom":
+            raise ValueError(
+                'Custom operators require a parseable whole correct answer or explicit limits="bounds", limits="domain", or limits="approach".'
+            )
+        else:
+            limits = OPS[operator][1]
     allowed = (
         {"bounds", "domain", "approach"}
         if operator == "custom"
@@ -618,14 +628,9 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
     if index != sympy.Symbol(config.index):
         raise ValueError("Correct answer index does not match index-variable.")
     if config.limits == "approach":
-        direction_source = limits[2].strip()
-        if (
-            len(direction_source) < 2
-            or direction_source[0] not in {"'", '"'}
-            or direction_source[-1] != direction_source[0]
-        ):
+        direction = _formatted_direction(limits)
+        if direction is None:
             raise ValueError('Limit direction must be "+", "-", or "+-".')
-        direction = direction_source[1:-1]
         public_direction = {value: key for key, value in DIRECTIONS.items()}.get(
             direction
         )
