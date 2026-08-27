@@ -28,7 +28,7 @@ string as above, or serialize them with `prairielearn.sympy_utils.sympy_to_json`
 | --- | --- | --- |
 | `answers-name` | required | Combined answer namespace. |
 | `index-variable` | required | Bound symbol; automatically allowed in the body. |
-| `operator` | `sum` | A built-in operator, or `custom` for a custom LaTeX operator. |
+| `operator` | inferred | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
 | `operator-latex` | unset | Required LaTeX operator when `operator="custom"`; invalid for built-in operators. |
 | `limits` | `auto` | `bounds`, `domain`, or `approach`; `auto` uses the table below. |
 | `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
@@ -82,6 +82,38 @@ stored response remains self-describing:
 For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
 
 ## Canonical answer
+
+### Operator inference
+
+When `operator` is omitted, a whole correct answer supplied as a string or
+JSON-safe dictionary identifies the built-in operator. Supported strings begin
+with `Sum`, `Product`, `Integral`, `Limit`, `Union`, `Intersection`,
+`DisjointUnion`, `And`, `Or`, `Min`, or `Max`. A canonical dictionary uses its
+`operator` field, while a PrairieLearn SymPy JSON dictionary can identify the
+binder-aware `Sum`, `Product`, `Integral`, and `Limit` classes.
+
+```html
+<pl-big-operator-input
+  answers-name="total"
+  index-variable="k"
+  correct-answer="Product(k, (k, 1, 4))"
+></pl-big-operator-input>
+```
+
+Strings and SymPy JSON dictionaries can also be assigned in `server.py`:
+
+```python
+k = sympy.symbols("k")
+data["correct_answers"]["total"] = str(sympy.Product(k, (k, 1, 4)))
+# Alternatively: psu.sympy_to_json(sympy.Product(k, (k, 1, 4)))
+```
+
+A canonical structured dictionary, in the format below, is another inferable
+answer source because it includes `"operator"`. An explicit HTML `operator`
+always takes precedence and is checked against the answer. Component
+`correct-answer-...` attributes and raw SymPy objects do not trigger inference,
+so they require an explicit `operator`. Ungraded elements and custom, malformed,
+or otherwise unrecognized answers likewise require an explicit `operator`.
 
 Every prepared or parsed combined answer is a flat version 1 dictionary. Mathematical leaves use `sympy_to_json(..., allow_sets=True)`:
 
