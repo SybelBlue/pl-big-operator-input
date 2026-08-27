@@ -145,6 +145,27 @@ def test_prepare_normalizes_binders(operator, correct):
     )
 
 
+def test_prepare_does_not_populate_params_with_correct_answer():
+    k = sympy.Symbol("k")
+    state = data(sympy.Sum(k**2, (k, 1, 4)))
+
+    mod.prepare(html(), state)
+
+    assert state["params"] == {}
+
+
+def test_prepare_does_not_use_correct_answer_backup_from_params():
+    k = sympy.Symbol("k")
+    state = data()
+    state["params"]["_pl_big_operator_input_correct_op"] = sympy.Sum(
+        k**2, (k, 1, 4)
+    )
+
+    mod.prepare(html(), state)
+
+    assert state["correct_answers"] == {}
+
+
 @pytest.mark.parametrize(
     "operator,correct",
     [
@@ -364,7 +385,6 @@ def test_min_max_answer_rendering_uses_prepared_answer(operator):
     state = data(answer)
     markup = html(operator=operator)
     mod.prepare(markup, state)
-    state["correct_answers"].clear()
     state["panel"] = "answer"
 
     rendered = mod.render(markup, state)
