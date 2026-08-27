@@ -30,7 +30,9 @@
       class="pl-big-operator-input__operator-stack{{#domain}} pl-big-operator-input__operator-stack--annotated{{/domain}}{{#approach}} pl-big-operator-input__operator-stack--annotated{{/approach}}"
     >
       {{#bounds}}
-        <div class="pl-big-operator-input__upper">
+        <div
+          class="pl-big-operator-input__upper pl-big-operator-input__range-upper-bound"
+        >
           {{#upper_field}}{{> bounds-math-field }}{{/upper_field}}
         </div>
       {{/bounds}}

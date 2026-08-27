@@ -729,6 +729,22 @@ def test_integral_bounds_use_a_column_between_operator_and_body():
     assert ".pl-big-operator-input__limits > .pl-big-operator-input__lower" in css
 
 
+def test_bounds_upper_field_restores_left_border_radius():
+    rendered = mod.render(html(operator="sum", limits="bounds"), data())
+    assert "pl-big-operator-input__range-upper-bound" in rendered
+
+    integral_rendered = mod.render(html(operator="integral", limits="bounds"), data())
+    assert "pl-big-operator-input__range-upper-bound" not in integral_rendered
+
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    selector = (
+        ".pl-big-operator-input__range-upper-bound .input-group > math-field"
+    )
+    assert selector in css
+    assert "border-top-left-radius: var(--bs-border-radius) !important" in css
+    assert "border-bottom-left-radius: var(--bs-border-radius) !important" in css
+
+
 def test_domain_integral_renders_only_a_subscript_field_between_operator_and_body():
     markup = html(operator="integral", limits="domain")
     rendered = mod.render(markup, data())
