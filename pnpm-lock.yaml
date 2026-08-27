@@ -216,6 +216,9 @@ importers:
       prettier-plugin-organize-attributes:
         specifier: ^1.0.0
         version: 1.0.0(prettier@3.9.6)
+      template-format-core:
+        specifier: ^0.1.1
+        version: 0.1.1
 
 packages:
 

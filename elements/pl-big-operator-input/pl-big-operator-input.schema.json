@@ -129,7 +129,11 @@
           "enum": ["bounds", "domain"]
         }
       },
-      "required": ["operator", "operator-latex", "limits"]
+      "required": [
+        "operator",
+        "operator-latex",
+        "limits"
+      ]
     },
     {
       "properties": {
@@ -148,7 +152,11 @@
           ]
         },
         "limits": {
-          "enum": ["auto", "bounds", "domain"]
+          "enum": [
+            "auto",
+            "bounds",
+            "domain"
+          ]
         }
       },
       "not": {

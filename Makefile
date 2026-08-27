@@ -81,7 +81,7 @@ docker:
 
 # Remove project-local caches, build outputs, and installed dependencies.
 clean:
-	rm -rf .venv node_modules build dist htmlcov .prairielearn/schemas
+	rm -rf .venv node_modules build dist htmlcov .prairielearn/schemas .pnpm-store
 	find . -type d \( \
 		-name __pycache__ -o \
 		-name .pytest_cache -o \

@@ -10,3 +10,4 @@
 
 # JS dev dependency caches
 node_modules
+.pnpm-store
