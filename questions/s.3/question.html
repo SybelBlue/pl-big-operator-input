@@ -1,9 +1,12 @@
 <pl-question-panel>
-  <p>Fill in the blanks to reproduce the following sum:</p>
-  <p>\[\displaystyle \sum_{j=-3}^{3} (2j+1)\]</p>
+  <p>Fill in the blanks to reproduce the following indexed maximum:</p>
 </pl-question-panel>
-<pl-big-operator-input
-  answers-name="sum"
-  index-variable="j"
-  correct-answer="Sum(2*j + 1, (j, -3, 3))"
-></pl-big-operator-input>
+<div class="d-flex align-items-center justify-content-center gap-3">
+  <span>\(\displaystyle \max_{j \in \{-3,-2,-1,0,1,2,3\}} (2j+1)\)</span>
+  <span>\(\Longrightarrow\)</span>
+  <pl-big-operator-input
+    answers-name="maximum"
+    correct-answer="Max(2*j + 1, (j, {-3, -2, -1, 0, 1, 2, 3}))"
+    grading-method="equivalent"
+  ></pl-big-operator-input>
+</div>

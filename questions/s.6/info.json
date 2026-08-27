@@ -1,8 +1,8 @@
 {
   "uuid": "0795f956-0f8a-4bec-8e43-b0187c18f25e",
-  "title": "Enter a definite trigonometric integral",
+  "title": "Enter a randomized trigonometric limit",
   "topic": "Basic arithmetic",
-  "singleVariant": true,
+  "singleVariant": false,
   "type": "v3",
   "tags": ["Under Construction!"],
   "sharePublicly": false

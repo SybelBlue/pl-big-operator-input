@@ -1,6 +1,11 @@
 <pl-question-panel>
-  <p>Fill in the blanks to reproduce the following definite integral:</p>
-  <p>\[\displaystyle \int_0^2 x^3\,dx\]</p>
+  <p>Fill in the blanks to reproduce the following sum:</p>
 </pl-question-panel>
-
-<pl-big-operator-input answers-name="integral" index-variable="x" operator="integral"></pl-big-operator-input>
+<div class="d-flex align-items-center justify-content-center gap-3">
+  <span>\(\displaystyle {{{params.answer_latex}}}\)</span>
+  <span>\(\Longrightarrow\)</span>
+  <pl-big-operator-input
+    answers-name="sum"
+    grading-method="component"
+  ></pl-big-operator-input>
+</div>

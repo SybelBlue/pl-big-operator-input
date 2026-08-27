@@ -9,29 +9,17 @@
       "description": "Big operator to display and use when constructing the combined answer. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "enum": [
         "sum",
-        "Sum",
         "product",
-        "Product",
         "integral",
-        "Integral",
         "limit",
-        "Limit",
         "union",
-        "Union",
         "intersection",
-        "Intersection",
         "disjoint-union",
-        "Disjoint-union",
         "and",
-        "And",
         "or",
-        "Or",
         "min",
-        "Min",
         "max",
-        "Max",
-        "custom",
-        "Custom"
+        "custom"
       ]
     },
     "operator-latex": {
@@ -126,7 +114,5 @@
       "type": "string"
     }
   },
-  "required": [
-    "answers-name"
-  ]
+  "required": ["answers-name"]
 }

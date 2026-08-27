@@ -1,5 +1,11 @@
 <pl-question-panel>
-  <p>Fill in the blanks to reproduce the following definite integral:</p>
-  <p>\[\displaystyle \int_0^{\pi} \sin(\theta)\,d\theta\]</p>
+  <p>Fill in the blanks to reproduce the following right-hand limit:</p>
 </pl-question-panel>
-<pl-big-operator-input answers-name="integral" index-variable="theta" operator="integral"></pl-big-operator-input>
+<div class="d-flex align-items-center justify-content-center gap-3">
+  <span>\(\displaystyle {{{params.answer_latex}}}\)</span>
+  <span>\(\Longrightarrow\)</span>
+  <pl-big-operator-input
+    answers-name="limit"
+    grading-method="equivalent"
+  ></pl-big-operator-input>
+</div>
