@@ -303,7 +303,17 @@ def _infer_direction(raw: Any, operator: str) -> str | None:
     if function_name is None:
         return None
     formatted = _formatted_call(raw, function_name)
-    if formatted is None or len(formatted[1]) != 3:
+    if formatted is None:
+        try:
+            value = _decode(raw)
+        except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
+            return None
+        if isinstance(value, sympy.Limit):
+            return {value: key for key, value in DIRECTIONS.items()}.get(
+                str(value.args[3])
+            )
+        return None
+    if len(formatted[1]) != 3:
         return None
     direction = _formatted_direction(formatted[1])
     if direction is None:
