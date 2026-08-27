@@ -42,6 +42,7 @@ def markup(
     allow_sets: bool,
     allow_complex: bool,
     show_help_text: bool = False,
+    show_score: bool = False,
     prefix: str | None = None,
     suffix: str | None = None,
 ) -> str:
@@ -51,7 +52,7 @@ def markup(
         "variables": ",".join(variables),
         "formula-editor": "true",
         "show-help-text": str(show_help_text).lower(),
-        "show-score": "false",
+        "show-score": str(show_score).lower(),
         "placeholder": "",
         "size": str(size),
         "aria-label": label,
@@ -79,12 +80,34 @@ def _render_data_view(data: dict[str, Any]) -> dict[str, Any]:
     return view
 
 
-def render(field_markup: str, data: dict[str, Any], *, aria_label: str) -> str:
-    rendered = CONTROLLER.render(field_markup, _render_data_view(data))
+def render(
+    field_markup: str,
+    data: dict[str, Any],
+    *,
+    aria_label: str,
+    score: float | None = None,
+) -> str:
+    view = _render_data_view(data)
+    if score is not None:
+        element = lxml.html.fragment_fromstring(field_markup)
+        name = element.get("answers-name")
+        if name:
+            view["partial_scores"] = dict(view["partial_scores"])
+            view["partial_scores"][name] = {"score": score}
+    rendered = CONTROLLER.render(field_markup, view)
     # The pinned upstream formula-editor template does not apply its aria-label
     # parameter to the math-field. Keep the vendored files pristine and bridge
     # that accessibility gap in the adapter.
-    return rendered.replace("<math-field", f'<math-field aria-label="{aria_label}"', 1)
+    rendered = rendered.replace(
+        "<math-field", f'<math-field aria-label="{aria_label}"', 1
+    )
+    if score is not None:
+        # The wrapper's component badges are intentionally icon-only. Keep this
+        # adaptation here so the pinned upstream template remains untouched.
+        rendered = rendered.replace(" 100%</span>", "</span>")
+        rendered = rendered.replace(" 0%</span>", "</span>")
+        rendered = rendered.replace(f" {round(score * 100)}%</span>", "</span>")
+    return rendered
 
 
 def parse(field_markup: str, data: dict[str, Any]) -> None:

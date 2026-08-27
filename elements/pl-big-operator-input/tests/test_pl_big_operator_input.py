@@ -616,6 +616,25 @@ def test_component_grading_weights_body():
     assert state["partial_scores"]["op"]["score"] == pytest.approx(0.75)
 
 
+def test_component_grading_shows_icon_only_badges_on_symbolic_inputs():
+    k = sympy.Symbol("k")
+    markup = html(**{"grading-method": "component"})
+    state = data(
+        sympy.Sum(k**2, (k, 1, 4)),
+        {"op-start": "1", "op-end": "5", "op-body": "k^2"},
+    )
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    rendered = mod.render(markup, state)
+
+    assert rendered.count("fa-check") == 2
+    assert rendered.count("fa-times") == 1
+    assert "100%</span>" not in rendered
+    assert "0%</span>" not in rendered
+
+
 @pytest.mark.parametrize("grading", ["exact", "equivalent"])
 def test_exact_and_equivalent_grading(grading):
     k = sympy.Symbol("k")
