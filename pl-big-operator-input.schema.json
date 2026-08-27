@@ -44,6 +44,10 @@
       "description": "Comma-separated list of additional symbolic variables allowed in student input.",
       "type": "string"
     },
+    "custom-functions": {
+      "description": "Comma-separated list of additional symbolic function names allowed in correct answers and student input.",
+      "type": "string"
+    },
     "limit-direction": {
       "description": "Direction from which the index variable approaches the target for a limit operator.",
       "default": "two-sided",

@@ -828,6 +828,42 @@ def test_allow_complex_is_delegated_to_symbolic_inputs():
     assert mod._config(markup).allow_complex is False
 
 
+def test_custom_functions_are_used_to_parse_component_correct_answers():
+    markup = html(
+        operator="custom",
+        limits="approach",
+        **{
+            "operator-latex": r"\operatorname{eval}",
+            "custom-functions": "f",
+            "grading-method": "component",
+            "correct-answer-target": "0",
+            "correct-answer-body": "f(k)",
+        },
+    )
+    state = data()
+
+    mod.pl.validate_element(
+        mod.lxml.html.fragment_fromstring(markup),
+        HERE / "pl-big-operator-input.schema.json",
+    )
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    assert mod._config(markup).custom_functions == ("f",)
+    assert mod._decode(answer["body"]) == sympy.Function("f")(sympy.Symbol("k"))
+
+
+def test_custom_functions_are_delegated_to_student_body_input():
+    markup = html(operator="sum", **{"custom-functions": "f"})
+    state = data(raw={"op-start": "1", "op-end": "4", "op-body": "f(k)"})
+
+    mod.parse(markup, state)
+
+    answer = state["submitted_answers"]["op"]
+    assert "format_errors" not in state
+    assert mod._decode(answer["body"]) == sympy.Function("f")(sympy.Symbol("k"))
+
+
 @pytest.mark.parametrize(
     ("invalid_field", "valid_field"),
     [("op-domain", "op-body"), ("op-body", "op-domain")],

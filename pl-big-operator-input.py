@@ -107,6 +107,7 @@ class Config:
     limits: LimitFormat
     index: str
     variables: tuple[str, ...]
+    custom_functions: tuple[str, ...]
     direction: str
     allowed_blank: AllowedBlank
     allow_complex: bool
@@ -421,6 +422,7 @@ def _config(html: str, data: Any | None = None) -> Config:
     if direction not in DIRECTIONS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
     variables = pl.get_string_attrib(element, "variables", "") or ""
+    custom_functions = pl.get_string_attrib(element, "custom-functions", "") or ""
     allowed_blank = pl.get_string_attrib(element, "allowed-blank", "none") or "none"
     if allowed_blank not in {"none", "limits", "body", "all"}:
         raise ValueError(
@@ -464,6 +466,7 @@ def _config(html: str, data: Any | None = None) -> Config:
         cast(LimitFormat, limits),
         index,
         tuple(x.strip() for x in variables.split(",") if x.strip()),
+        tuple(x.strip() for x in custom_functions.split(",") if x.strip()),
         direction,
         cast(AllowedBlank, allowed_blank),
         bool(pl.get_boolean_attrib(element, "allow-complex", False)),
@@ -569,7 +572,11 @@ def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, 
             else config.variables
         )
         try:
-            parsed = _parse(raw, variables) if isinstance(raw, str) else _decode(raw)
+            parsed = (
+                _parse(raw, variables, config.custom_functions)
+                if isinstance(raw, str)
+                else _decode(raw)
+            )
         except Exception as exc:
             raise ValueError(
                 f'Parsing correct answer component "{component}" failed.'
@@ -638,7 +645,9 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
         )
     try:
         body = _parse(
-            body_source, tuple(dict.fromkeys((*config.variables, config.index)))
+            body_source,
+            tuple(dict.fromkeys((*config.variables, config.index))),
+            config.custom_functions,
         )
         index = sympy.sympify(limits[0])
     except (sympy.SympifyError, TypeError, ValueError) as exc:
@@ -657,19 +666,19 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
         if public_direction != config.direction:
             raise ValueError("Correct answer direction does not match limit-direction.")
         try:
-            target = _parse(limits[1], config.variables)
+            target = _parse(limits[1], config.variables, config.custom_functions)
         except (sympy.SympifyError, TypeError, ValueError) as exc:
             raise ValueError("The correct answer contains invalid SymPy data.") from exc
         return _canonical(config, {"target": target, "body": body})
     if config.limits == "bounds":
         try:
-            lower = _parse(limits[1], config.variables)
-            upper = _parse(limits[2], config.variables)
+            lower = _parse(limits[1], config.variables, config.custom_functions)
+            upper = _parse(limits[2], config.variables, config.custom_functions)
         except (sympy.SympifyError, TypeError, ValueError) as exc:
             raise ValueError("The correct answer contains invalid SymPy data.") from exc
         return _canonical(config, {"lower": lower, "upper": upper, "body": body})
     try:
-        domain = _parse(limits[1], config.variables)
+        domain = _parse(limits[1], config.variables, config.custom_functions)
     except (sympy.SympifyError, TypeError, ValueError) as exc:
         raise ValueError("The correct answer contains invalid SymPy data.") from exc
     return _canonical(config, {"domain": domain, "body": body})
@@ -735,6 +744,7 @@ def _field(
     field_markup = symbolic_input_adapter.markup(
         name=name,
         variables=variables,
+        custom_functions=config.custom_functions,
         label=label,
         size=size,
         allow_sets=_requires_set(config, cast(Component, component)),
@@ -898,12 +908,21 @@ def render(element_html: str, data: pl.QuestionData) -> str:
     )
 
 
-def _parse(source: str, variables: tuple[str, ...]) -> sympy.Basic:
+def _parse(
+    source: str,
+    variables: tuple[str, ...],
+    custom_functions: tuple[str, ...] = (),
+) -> sympy.Basic:
     source = re.sub(r"\binfinity\b", "infty", source)
     for name in ("sin", "cos", "tan", "sec", "csc", "cot"):
         source = re.sub(rf"\b{' *'.join(name)}\b", name, source)
     return psu.convert_string_to_sympy(
-        source, variables, allow_hidden=True, allow_sets=True, allow_trig_functions=True
+        source,
+        variables,
+        allow_hidden=True,
+        allow_sets=True,
+        allow_trig_functions=True,
+        custom_functions=custom_functions,
     )
 
 
@@ -948,6 +967,7 @@ def _parse_values(
         field_markup = symbolic_input_adapter.markup(
             name=name,
             variables=variables,
+            custom_functions=config.custom_functions,
             label={
                 "lower": "Lower bound",
                 "upper": "Upper bound",

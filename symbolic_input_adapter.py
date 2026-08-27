@@ -37,6 +37,7 @@ def markup(
     *,
     name: str,
     variables: tuple[str, ...],
+    custom_functions: tuple[str, ...],
     label: str,
     size: int,
     allow_sets: bool,
@@ -59,6 +60,8 @@ def markup(
         "allow-sets": str(allow_sets).lower(),
         "allow-complex": str(allow_complex).lower(),
     }
+    if custom_functions:
+        attributes["custom-functions"] = ",".join(custom_functions)
     if prefix is not None:
         attributes["label"] = prefix
     if suffix is not None:
