@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +16,14 @@ import sympy
 import sympy.sets
 
 HERE = Path(__file__).parent
+ADAPTER_SPEC = importlib.util.spec_from_file_location(
+    "pl_big_operator_input_symbolic_adapter", HERE / "symbolic_input_adapter.py"
+)
+if ADAPTER_SPEC is None or ADAPTER_SPEC.loader is None:
+    raise RuntimeError("Could not load the pl-symbolic-input adapter.")
+symbolic_input_adapter = importlib.util.module_from_spec(ADAPTER_SPEC)
+sys.modules[ADAPTER_SPEC.name] = symbolic_input_adapter
+ADAPTER_SPEC.loader.exec_module(symbolic_input_adapter)
 OPS = {
     "sum": (r"\sum", "bounds"),
     "product": (r"\prod", "bounds"),
@@ -389,19 +399,22 @@ def _field(
     suffix: str | None = None,
 ) -> dict[str, Any]:
     name = config.name(component)
-    raw = data.get("raw_submitted_answers", {})
+    variables = (
+        tuple(dict.fromkeys((*config.variables, config.index)))
+        if component == "body"
+        else config.variables
+    )
+    field_markup = symbolic_input_adapter.markup(
+        name=name,
+        variables=variables,
+        label=label,
+        size=size,
+        allow_sets=_requires_set(config, cast(Component, component)),
+        prefix=prefix,
+        suffix=suffix,
+    )
     return {
-        "answers_name": name,
-        "error_id": f"big-operator-input-error-{name}",
-        "label": label,
-        "size": size,
-        "prefix": prefix,
-        "suffix": suffix,
-        "editable": data.get("panel", "question") == "question",
-        "raw_submitted_answer": raw.get(name, ""),
-        "raw_submitted_answer_latex": raw.get(f"{name}-latex", ""),
-        "parse_error": data.get("format_errors", {}).get(name),
-        "custom_functions": "",
+        "html": symbolic_input_adapter.render(field_markup, data, aria_label=label),
     }
 
 
@@ -551,9 +564,8 @@ def _blank(config: Config, raw: dict[str, Any] | None) -> bool:
 def _parse_values(
     config: Config, data: dict[str, Any]
 ) -> dict[str, sympy.Basic] | None:
-    raw = data.get("raw_submitted_answers", {})
     submitted = data.setdefault("submitted_answers", {})
-    result = {}
+    result: dict[str, sympy.Basic] = {}
     for component in config.components:
         name = config.name(component)
         variables = (
@@ -561,16 +573,33 @@ def _parse_values(
             if component == "body"
             else config.variables
         )
+        field_markup = symbolic_input_adapter.markup(
+            name=name,
+            variables=variables,
+            label={
+                "lower": "Lower bound",
+                "upper": "Upper bound",
+                "domain": "Index domain",
+                "target": "Approach target",
+                "body": "Operator body",
+            }[component],
+            size=16 if component == "body" else 10,
+            allow_sets=_requires_set(config, component),
+        )
+        symbolic_input_adapter.parse(field_markup, data)
+        raw_value = submitted.get(name)
+        if not isinstance(raw_value, dict):
+            continue
         try:
-            source = str(raw.get(name, ""))
-            if not source.strip():
-                raise ValueError("No submitted answer.")
-            value = _parse(source, variables)
+            value = cast(
+                sympy.Basic,
+                psu.json_to_sympy(cast(Any, raw_value), allow_sets=True),
+            )
             if _requires_set(config, component) and not _is_set_input(value):
-                raise ValueError("This field must be a set.")
+                data.setdefault("format_errors", {})[name] = "This field must be a set."
+                continue
             result[component] = value
-            submitted[name] = _json(value)
-        except Exception as exc:  # noqa: BLE001 -- PrairieLearn exposes several parser exception types.
+        except Exception as exc:  # noqa: BLE001 -- delegated JSON decoding can expose parser errors.
             data.setdefault("format_errors", {})[name] = str(exc)
     return result if len(result) == len(config.components) else None
 
@@ -583,7 +612,9 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
         if not config.allow_blank:
             errors = data.setdefault("format_errors", {})
             for component in config.components:
-                errors[config.name(component)] = "No submitted answer."
+                name = config.name(component)
+                submitted[name] = None
+                errors[name] = "No submitted answer."
         return
     values = _parse_values(config, data)
     submitted[config.answer] = _canonical(config, values) if values else None

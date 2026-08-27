@@ -5,9 +5,10 @@
       "mathlive/mathlive.min.js"
     ],
     "elementScripts": [
-      "pl-big-operator-input.js"
+      "vendor/prairielearn/pl-symbolic-input/pl-symbolic-input.js"
     ],
     "elementStyles": [
+      "vendor/prairielearn/pl-symbolic-input/pl-symbolic-input.css",
       "pl-big-operator-input.css"
     ]
   }

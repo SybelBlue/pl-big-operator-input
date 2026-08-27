@@ -2,6 +2,13 @@
 
 This element collects an indexed big-operator expression in separate limit and body fields while storing one lossless, JSON-safe combined answer.
 
+Its visible component fields are rendered and parsed by a vendored, commit-pinned
+copy of PrairieLearn's `pl-symbolic-input`. The wrapper is responsible for the
+operator layout, canonical aggregate answer, and grading; the upstream element
+owns the MathLive editor and symbolic-input parsing behavior. The source commit
+and license are recorded alongside the vendor directory in
+`prairielearn-source.json`.
+
 ```html
 <pl-big-operator-input answers-name="total" operator="sum" index-variable="k" variables="n"></pl-big-operator-input>
 ```

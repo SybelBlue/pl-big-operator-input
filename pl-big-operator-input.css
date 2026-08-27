@@ -66,17 +66,9 @@
   text-align: center;
 }
 
-/* overrides */
+/* Layout overrides for delegated pl-symbolic-input fields. */
 .pl-big-operator-input .d-inline-block {
   margin: 0 !important;
-}
-.pl-big-operator-input math-field:nth-child(4) {
-  border-top-left-radius: var(--bs-border-radius) !important;
-  border-bottom-left-radius: var(--bs-border-radius) !important;
-}
-
-.pl-big-operator-input math-field::part(menu-toggle) {
-  display: none;
 }
 
 .pl-big-operator-input__upper math-field::part(virtual-keyboard-toggle),
@@ -93,9 +85,19 @@
   font-size: 15pt;
 }
 
-.pl-big-operator-input__upper > .pl-big-operator-input__math-field,
-.pl-big-operator-input__lower > .pl-big-operator-input__math-field {
+.pl-big-operator-input__upper > .d-inline-block,
+.pl-big-operator-input__lower > .d-inline-block {
   width: auto;
+}
+
+.pl-big-operator-input__upper math-field,
+.pl-big-operator-input__lower math-field {
+  min-width: 7ch;
+  text-align: center;
+}
+
+.pl-big-operator-input__annotation math-field {
+  min-width: 10ch;
 }
 
 .pl-big-operator-input__bounds > .pl-big-operator-input__upper {
@@ -138,8 +140,8 @@
 
 .pl-big-operator-input__body math-field {
   border-radius: var(--bs-border-radius) !important;
+  min-width: 16ch;
 }
-
 
 .pl-big-operator-input__differential {
   font-size: 1.5rem;
@@ -177,5 +179,4 @@
   .pl-big-operator-input__operator-stack--integral {
     gap: 0.25rem;
   }
-
 }
