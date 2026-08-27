@@ -17,7 +17,8 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 | --- | --- | --- |
 | `answers-name` | required | Combined answer namespace. |
 | `index-variable` | required | Bound symbol; automatically allowed in the body. |
-| `operator` | `sum` | `sum`, `product`, `integral`, `limit`, `union`, `intersection`, `disjoint-union`, `and`, `or`, `min`, or `max`. |
+| `operator` | `sum` | A built-in operator, or `custom` for a custom LaTeX operator. |
+| `operator-latex` | unset | Required LaTeX operator when `operator="custom"`; invalid for built-in operators. |
 | `limits` | `auto` | `bounds`, `domain`, or `approach`; `auto` uses the table below. |
 | `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
 | `variables` | empty | Comma-separated extra allowed symbols. |
@@ -39,8 +40,27 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 | union, intersection, disjoint-union | `\bigcup`, `\bigcap`, `\bigsqcup` | domain | bounds, domain |
 | and, or | `\bigwedge`, `\bigvee` | domain | bounds, domain |
 | min, max | `\min`, `\max` | domain | bounds, domain |
+| custom | `operator-latex` | none | bounds, domain |
 
 Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<name>-domain` and `<name>-body`. Approach forms use `<name>-target` and `<name>-body`. Only fields in the selected form are created or parsed. A one-sided limit adds `-` or `+` to the target display; the public combined answer retains the descriptive direction value.
+
+Custom operators require an explicit `limits="bounds"` or `limits="domain"`
+because there is no meaningful automatic form. They are ungraded when no correct
+answer is supplied. A custom operator with a correct answer must use
+`grading-method="exact"`; symbolic equivalence is unavailable because arbitrary
+LaTeX does not identify a SymPy operation. Their canonical submissions include
+an additional `"operator_latex"` key so the stored response remains
+self-describing:
+
+```html
+<pl-big-operator-input
+  answers-name="expectation"
+  operator="custom"
+  operator-latex="\mathbb{E}"
+  limits="domain"
+  index-variable="k"
+></pl-big-operator-input>
+```
 
 For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
 
@@ -62,6 +82,8 @@ Every prepared or parsed combined answer is a flat version 1 dictionary. Mathema
 ```
 
 Domain answers replace `lower` and `upper` with `domain`. Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
+Custom submissions use the same form-dependent components and add
+`"operator_latex"`; built-in answers do not include that key.
 
 Authors may instead provide the visible components as attributes. Each value is
 accepted by the same basic parser used for student input:
@@ -92,3 +114,9 @@ Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, 
 ## Grading
 
 `exact` requires an identical canonical operator, form, direction, index, and exact SymPy components. `component` compares visible components independently. `equivalent` constructs binder-aware Sum, Product, Integral, or Limit objects where possible. Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly. Bounded forms of variadic operators have no faithful SymPy binder and are likewise reported as unsupported for equivalent grading; use `exact` or `component` for those forms.
+
+If no correct answer is supplied through an attribute, `data["correct_answers"]`,
+or the prepared-answer cache, the element is ungraded. It still parses and stores
+the combined canonical response, but it does not create a partial score. Submission
+panels display the response without a score badge, and answer panels render nothing.
+Blank-response validation remains controlled separately by `allow-blank`.

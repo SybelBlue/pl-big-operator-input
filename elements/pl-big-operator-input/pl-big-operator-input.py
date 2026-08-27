@@ -72,6 +72,7 @@ CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
 class Config:
     answer: str
     operator: str
+    operator_latex: str
     limits: LimitFormat
     index: str
     variables: tuple[str, ...]
@@ -100,11 +101,32 @@ def _config(html: str) -> Config:
             raise ValueError(f'Required attribute "{name}" missing')
         required[name] = value.strip()
     operator = pl.get_string_attrib(element, "operator", "sum") or "sum"
-    if operator not in OPS:
+    if operator not in {*OPS, "custom"}:
         raise ValueError(f'Unknown operator "{operator}".')
+    custom_latex = pl.get_string_attrib(element, "operator-latex", None)
+    if operator == "custom":
+        if custom_latex is None or not custom_latex.strip():
+            raise ValueError(
+                'Attribute "operator-latex" is required when operator="custom".'
+            )
+        operator_latex = custom_latex.strip()
+    else:
+        if custom_latex is not None:
+            raise ValueError(
+                'Attribute "operator-latex" can only be used when operator="custom".'
+            )
+        operator_latex = OPS[operator][0]
     limits = pl.get_string_attrib(element, "limits", "auto") or "auto"
+    if operator == "custom" and limits == "auto":
+        raise ValueError(
+            'Custom operators require explicit limits="bounds" or limits="domain".'
+        )
     limits = OPS[operator][1] if limits == "auto" else limits
-    allowed = {"bounds", "domain"} if operator in FLEXIBLE else {OPS[operator][1]}
+    allowed = (
+        {"bounds", "domain"}
+        if operator in FLEXIBLE or operator == "custom"
+        else {OPS[operator][1]}
+    )
     if limits not in allowed:
         raise ValueError(
             f'Operator "{operator}" does not support limits="{limits}"; use {", ".join(sorted(allowed))}.'
@@ -154,9 +176,18 @@ def _config(html: str) -> Config:
         raise ValueError(
             'Use either "correct-answer" or component correct-answer attributes, not both.'
         )
+    if (
+        operator == "custom"
+        and (correct_attribute is not None or supplied_components)
+        and grading != "exact"
+    ):
+        raise ValueError(
+            'Custom operators with a correct answer require grading-method="exact".'
+        )
     return Config(
         required["answers-name"],
         operator,
+        operator_latex,
         cast(LimitFormat, limits),
         required["index-variable"],
         tuple(x.strip() for x in variables.split(",") if x.strip()),
@@ -211,6 +242,8 @@ def _canonical(config: Config, values: dict[str, sympy.Basic]) -> dict[str, Any]
         "limits": config.limits,
         "index": _json(sympy.Symbol(config.index)),
     }
+    if config.operator == "custom":
+        result["operator_latex"] = config.operator_latex
     result.update({key: _json(values[key]) for key in config.components})
     if config.limits == "approach":
         result["direction"] = config.direction
@@ -219,6 +252,8 @@ def _canonical(config: Config, values: dict[str, sympy.Basic]) -> dict[str, Any]
 
 def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
     keys = {"_type", "_version", "operator", "limits", "index", *config.components}
+    if config.operator == "custom":
+        keys.add("operator_latex")
     if config.limits == "approach":
         keys.add("direction")
     if (
@@ -232,6 +267,10 @@ def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
     if value["operator"] != config.operator or value["limits"] != config.limits:
         raise ValueError(
             "Correct answer operator or limits form does not match the element."
+        )
+    if config.operator == "custom" and value["operator_latex"] != config.operator_latex:
+        raise ValueError(
+            "Correct answer custom operator does not match operator-latex."
         )
     if config.limits == "approach" and value["direction"] != config.direction:
         raise ValueError("Correct answer direction does not match limit-direction.")
@@ -311,6 +350,10 @@ def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
             )
         )
     )
+    if config.operator == "custom" and raw is not None and config.grading != "exact":
+        raise ValueError(
+            'Custom operators with a correct answer require grading-method="exact".'
+        )
     if raw is None:
         return None
     if isinstance(raw, dict) and raw.get("_type") == "operator_expression":  # type: ignore
@@ -367,7 +410,7 @@ def _question(config: Config, data: dict[str, Any]) -> str:
     context: dict[str, Any] = {
         config.limits: True,
         "integral": config.operator == "integral",
-        "operator_latex": OPS[config.operator][0],
+        "operator_latex": config.operator_latex,
         "index_label": index,
         "body_field": _field(config, "body", "Operator body", 16, data),
     }
@@ -416,7 +459,7 @@ def _tex(config: Config, data: dict[str, Any]) -> str:
     raw = data.get("raw_submitted_answers", {})
     get = lambda c: raw.get(config.name(c), "?")
     index = sympy.latex(sympy.Symbol(config.index))
-    op = OPS[config.operator][0]
+    op = config.operator_latex
     if config.limits == "bounds":
         if config.operator == "integral":
             return rf"{op}_{{{get('lower')}}}^{{{get('upper')}}} {get('body')}\,\mathrm{{d}}{index}"
@@ -429,13 +472,6 @@ def _tex(config: Config, data: dict[str, Any]) -> str:
         config.direction
     ]
     return rf"{op}_{{{index}\to {get('target')}{direction}}} {get('body')}"
-
-
-def _correct_tex(config: Config, data: dict[str, Any]) -> str:
-    structured = _correct(config, data)
-    if structured is None:
-        return ""
-    return _structured_tex(config, structured)
 
 
 def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
@@ -465,17 +501,19 @@ def render(element_html: str, data: dict[str, Any]) -> str:
     if panel == "question":
         return _question(config, data)
     if panel == "answer":
+        correct = _correct(config, data)
+        if correct is None:
+            return ""
         return chevron.render(
             (HERE / "pl-big-operator-input-submission.mustache").read_text(),
-            {"tex": _correct_tex(config, data)},
+            {"tex": _structured_tex(config, correct)},
             partials_path=str(HERE / "partials"),
             partials_ext="mustache",
         )
-    score = float(data.get("partial_scores", {}).get(config.answer, {}).get("score", 0))
-    context: dict[str, Any] = {
-        "tex": _submitted_tex(config, data),
-        **_score_badge(score),
-    }
+    context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
+    partial_score = data.get("partial_scores", {}).get(config.answer)
+    if partial_score is not None:
+        context.update(_score_badge(float(partial_score.get("score", 0))))
     return chevron.render(
         (HERE / "pl-big-operator-input-submission.mustache").read_text(),
         context,

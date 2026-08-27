@@ -17,8 +17,12 @@
         "and",
         "or",
         "min",
-        "max"
+        "max",
+        "custom"
       ]
+    },
+    "operator-latex": {
+      "type": "string"
     },
     "limits": {
       "default": "auto",
@@ -84,5 +88,56 @@
   "required": [
     "answers-name",
     "index-variable"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "operator": {
+          "const": "custom"
+        },
+        "limits": {
+          "enum": ["bounds", "domain"]
+        }
+      },
+      "required": ["operator", "operator-latex", "limits"]
+    },
+    {
+      "properties": {
+        "operator": {
+          "enum": [
+            "sum",
+            "product",
+            "integral",
+            "union",
+            "intersection",
+            "disjoint-union",
+            "and",
+            "or",
+            "min",
+            "max"
+          ]
+        },
+        "limits": {
+          "enum": ["auto", "bounds", "domain"]
+        }
+      },
+      "not": {
+        "required": ["operator-latex"]
+      }
+    },
+    {
+      "properties": {
+        "operator": {
+          "const": "limit"
+        },
+        "limits": {
+          "enum": ["auto", "approach"]
+        }
+      },
+      "required": ["operator"],
+      "not": {
+        "required": ["operator-latex"]
+      }
+    }
   ]
 }
