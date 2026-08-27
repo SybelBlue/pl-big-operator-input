@@ -25,23 +25,23 @@ inconvenient.
 
 ## Attributes
 
-| Attribute                                                                                                             | Inferable | Default                  | Meaning                                                                                                                                          |
-| --------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `answers-name`                                                                                                        |           | required                 | Combined answer namespace.                                                                                                                       |
-| `correct-answer`                                                                                                      |           | ---                      | The correct answer, either as a parsable string or canonical form dict, **that sets inference data for the problem**                             |
-| `operator`                                                                                                            | ☑️        | required if not inferred | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
-| `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                        |
-| `limits`                                                                                                              | ☑️        | `auto`                   | `bounds`, `domain`, or `approach`; `auto` uses the table below only when the limits form cannot be inferred from a whole answer.                 |
-| `limit-direction`                                                                                                     | ☑️        | `two-sided`              | `two-sided`, `from-left`, or `from-right` for limits.                                                                                            |
-| `variables`                                                                                                           |           | `""`                     | Comma-separated extra allowed symbols beyond the index variable, e.g. `"Gamma,k,N"`.                                                             |
-| `custom-functions`                                                                                                    |           | `""`                     | Comma-separated symbolic function names allowed in correct answers and student input, e.g. `"f,g"`.                                              |
-| `operator-latex`                                                                                                      |           | ---                      | Operator display LaTeX. It can override a built-in operator's symbol; without `operator`, it implies `operator="custom"`.                        |
-| `allowed-blank`                                                                                                       |           | `none`                   | Permit blank `limits`, the `body`, `all` fields, or `none`.                                                                                      |
-| `show-help-text`                                                                                                      |           | `true`                   | Show symbolic-entry help beside the body input. Set to `false` to hide it.                                                                       |
-| `grading-method`                                                                                                      |           | `equivalent`             | `exact`, `component`, or `equivalent`.                                                                                                           |
-| `body-relative-weight`                                                                                                |           | `3`                      | Body weight in component grading; every limit component has weight 1.                                                                            |
-| `weight`                                                                                                              |           | `1`                      | PrairieLearn score weight.                                                                                                                       |
-| `correct-answer-start`, `correct-answer-end`, `correct-answer-domain`, `correct-answer-target`, `correct-answer-body` | ☑️        | ---                      | Alternative string answers for the visible component fields. Supply every component for the resolved limits form.                                |
+| Attribute                                                                                                             | Inferable | Default                  | Meaning                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `answers-name`                                                                                                        |           | required                 | Combined answer namespace.                                                                                           |
+| `correct-answer`                                                                                                      |           | ---                      | The correct answer, either as a parsable string or canonical form dict, **that sets inference data for the problem** |
+| `operator`                                                                                                            | ☑️        | required if not inferred | A built-in operator, or `custom` for a custom LaTeX operator.                                                        |
+| `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body.                                                                     |
+| `limits`                                                                                                              | ☑️        | `auto`                   | `bounds`, `domain`, or `approach`; `auto` uses the table below only when the value cannot be inferred.               |
+| `limit-direction`                                                                                                     | ☑️        | `two-sided`              | `two-sided`, `from-left`, or `from-right` for limits.                                                                |
+| `variables`                                                                                                           |           | `""`                     | Comma-separated extra allowed symbols beyond the index variable, e.g. `"Gamma,k,N"`.                                 |
+| `custom-functions`                                                                                                    |           | `""`                     | Comma-separated symbolic function names allowed in correct answers and student input, e.g. `"f,g"`.                  |
+| `operator-latex`                                                                                                      |           | ---                      | Operator display LaTeX. It can override a built-in operator's symbol.                                                |
+| `allowed-blank`                                                                                                       |           | `none`                   | Permit blank `limits`, the `body`, `all` fields, or `none`.                                                          |
+| `show-help-text`                                                                                                      |           | `true`                   | Show symbolic-entry help beside the body input. Set to `false` to hide it.                                           |
+| `grading-method`                                                                                                      |           | `equivalent`             | `exact`, `component`, or `equivalent`.                                                                               |
+| `body-relative-weight`                                                                                                |           | `3`                      | Body weight in component grading; every limit component has weight 1.                                                |
+| `weight`                                                                                                              |           | `1`                      | PrairieLearn score weight.                                                                                           |
+| `correct-answer-start`, `correct-answer-end`, `correct-answer-domain`, `correct-answer-target`, `correct-answer-body` | ☑️        | ---                      | Alternative string answers for the visible component fields. Supply every component for the resolved limits form.    |
 
 ## Operators and Limits
 
@@ -87,7 +87,7 @@ Here are some examples of the custom operator in use:
   index-variable="x"
   custom-functions="f"
   correct-answer-target="0"
-  limit-direction="both-sides"
+  limit-direction="two-sided"
   correct-answer-body="f(x)"
   grading-method="component"
 ></pl-big-operator-input>
@@ -114,8 +114,8 @@ layouts; they do not define a new symbolic operation in SymPy. Consequently:
 
 ### Parsable `correct-answer` (preferred)
 
-When `operator` is omitted, a whole correct answer supplied as a string or
-JSON-safe dictionary identifies the built-in operator. Supported strings begin
+When `operator` is omitted, a correct answer supplied as a string or
+JSON-safe dictionary identifies the built-in operator, index-string, and limits. Supported strings begin
 with `Sum`, `Product`, `Integral`, `Limit`, `Union`, `Intersection`,
 `DisjointUnion`, `And`, `Or`, `Min`, `Max`, or `Custom`. A canonical dictionary uses its
 `operator` field, while a PrairieLearn SymPy JSON dictionary can identify the
@@ -161,8 +161,9 @@ Strings and SymPy JSON dictionaries can also be assigned in `server.py`:
 
 ```python
 k = sympy.symbols("k")
-data["correct_answers"]["total"] = str(sympy.Product(k + 1, (k, 1, 4)))
-# Alternatively: psu.sympy_to_json(sympy.Product(k + 1, (k, 1, 4)))
+ans = sympy.Product(k + 1, (k, 1, 4))
+data["correct_answers"]["total"] = str(ans)
+# Alternatively: ... = psu.sympy_to_json(ans)
 ```
 
 A canonical structured dictionary, in the format below, is another inferable
@@ -198,36 +199,12 @@ second argument:
   answers-name="sets"
   correct-answer="Union({k}, (k, {1, 2}))"
   grading-method="exact"
-  index-variable="k"
 ></pl-big-operator-input>
 ```
 
 The same form supports `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`,
 and `Max`. These strings normalize to the canonical answer without evaluating
 away the index and limits.
-
-### Canonical representation
-
-Every prepared or parsed combined answer is a flat version 1 dictionary. Mathematical leaves use `sympy_to_json(..., allow_sets=True)`:
-
-```python
-# canonical JSON repr of \sum_{k=1}^n k^2
-{
-    "_type": "operator_expression",
-    "_version": 1,
-    "operator": "sum",
-    "limits": "bounds",
-    "index": psu.sympy_to_json(k),
-    "lower": psu.sympy_to_json(1),
-    "upper": psu.sympy_to_json(n),
-    "body": psu.sympy_to_json(k**2),
-}
-```
-
-- Range answers use `lower` and `upper`, as seen above.
-- Domain answers replace `lower` and `upper` with `domain`.
-- Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
-- Custom submissions use the same form-dependent components and add `"operator_latex"`; built-in answers do not include that key.
 
 ### Component attributes (alternative)
 
@@ -236,7 +213,7 @@ secondary interface; each value is accepted by the same basic parser used for
 student input:
 
 ```html
-<!-- html repr of \sum_{k=1}^n k^2 -->
+<!-- component repr of Sum(k ** 2, (k, 1, n)) -->
 <pl-big-operator-input
   answers-name="total"
   correct-answer-body="k^2"
@@ -256,6 +233,29 @@ supplies the operator, limits form, index, and limit direction and normalizes
 the values to the canonical representation during `prepare()`. The index
 variable is automatically available when parsing the body; other symbols must
 be listed in `variables`.
+
+### Canonical representation
+
+Every prepared or parsed answer is a flat version 1 dictionary. Mathematical leaves use `sympy_to_json(..., allow_sets=True)`:
+
+```python
+# canonical JSON repr of Sum(k ** 2, (k, 1, n))
+{
+    "_type": "operator_expression",
+    "_version": 1,
+    "operator": "sum",
+    "limits": "bounds",
+    "index": psu.sympy_to_json(k),
+    "lower": psu.sympy_to_json(1),
+    "upper": psu.sympy_to_json(n),
+    "body": psu.sympy_to_json(k**2),
+}
+```
+
+- Range answers use `lower` and `upper`, as seen above.
+- Domain answers replace `lower` and `upper` with `domain`.
+- Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
+- Custom submissions use the same form-dependent components and add `"operator_latex"`; built-in answers do not include that key.
 
 ## Grading
 
