@@ -33,7 +33,7 @@ string as above, or serialize them with `prairielearn.sympy_utils.sympy_to_json`
 | `limits` | `auto` | `bounds`, `domain`, or `approach`; `auto` uses the table below. |
 | `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
 | `variables` | empty | Comma-separated extra allowed symbols. |
-| `allow-blank` | `false` | Permit a wholly blank response. |
+| `allowed-blank` | `none` | Permit blank `limits`, the `body`, `all` fields, or `none`. |
 | `show-help-text` | `true` | Show symbolic-entry help beside the body input. Set to `false` to hide it. |
 | `grading-method` | `equivalent` | `exact`, `component`, or `equivalent`. |
 | `body-relative-weight` | `3` | Body weight in component grading; every limit component has weight 1. |
@@ -158,4 +158,4 @@ If no correct answer is supplied through an attribute, `data["correct_answers"]`
 or the prepared-answer cache, the element is ungraded. It still parses and stores
 the combined canonical response, but it does not create a partial score. Submission
 panels display the response without a score badge, and answer panels render nothing.
-Blank-response validation remains controlled separately by `allow-blank`.
+Blank-response validation remains controlled separately by `allowed-blank`.
