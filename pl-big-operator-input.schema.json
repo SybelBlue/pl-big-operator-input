@@ -27,7 +27,7 @@
       "type": "string"
     },
     "limits": {
-      "description": "Layout of the operator limits. Auto infers the layout from a whole binder-bearing correct answer when available, otherwise selects the built-in operator's default layout; custom operators require bounds or domain.",
+      "description": "Layout of the operator limits. Auto infers the layout from a parseable whole correct answer when available, otherwise selects the built-in operator's default layout; custom operators require bounds or domain.",
       "default": "auto",
       "enum": [
         "auto",
@@ -89,7 +89,7 @@
       "type": "integer"
     },
     "correct-answer": {
-      "description": "Complete correct answer as a supported binder-aware expression, including Custom(body, binder) when operator-latex is supplied; cannot be combined with component correct-answer attributes.",
+      "description": "Complete correct answer as a supported parseable expression, including Custom(body, limits) when operator-latex is supplied; cannot be combined with component correct-answer attributes.",
       "type": "string",
       "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max|Custom)\\s*\\(.+\\)\\s*$"
     },
