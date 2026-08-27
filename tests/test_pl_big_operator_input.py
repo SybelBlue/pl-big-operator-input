@@ -626,6 +626,28 @@ def test_custom_operator_exact_grading():
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
+def test_custom_operator_correct_answer_panel_renders_complete_notation():
+    markup = html(
+        operator="custom",
+        limits="bounds",
+        **{
+            "operator-latex": r"\bigoplus",
+            "grading-method": "exact",
+            "correct-answer-start": "1",
+            "correct-answer-end": "4",
+            "correct-answer-body": "k^2",
+        },
+    )
+    state = data(panel="answer")
+
+    mod.prepare(markup, state)
+    rendered = mod.render(markup, state)
+
+    assert r"\bigoplus_{k=1}^{4} k^{2}" in rendered
+    assert "?" not in rendered
+    assert "badge" not in rendered
+
+
 def test_custom_operator_correct_answer_requires_exact_grading():
     with pytest.raises(ValueError, match='grading-method="exact"'):
         mod.prepare(
