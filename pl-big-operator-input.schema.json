@@ -2,9 +2,11 @@
   "$schema": "http://json-schema.org/draft-06/schema#",
   "properties": {
     "answers-name": {
+      "description": "Name used to store the combined submitted answer and grading result.",
       "type": "string"
     },
     "operator": {
+      "description": "Big operator to display and use when constructing the combined answer.",
       "default": "sum",
       "enum": [
         "sum",
@@ -22,9 +24,11 @@
       ]
     },
     "operator-latex": {
+      "description": "LaTeX that displays the operator when operator is custom; required for custom operators and invalid for built-in operators.",
       "type": "string"
     },
     "limits": {
+      "description": "Layout of the operator limits. Auto selects the built-in operator's default layout; custom operators require bounds or domain.",
       "default": "auto",
       "enum": [
         "auto",
@@ -34,12 +38,15 @@
       ]
     },
     "index-variable": {
+      "description": "Bound variable used by the operator and automatically allowed in the body expression.",
       "type": "string"
     },
     "variables": {
+      "description": "Comma-separated list of additional symbolic variables allowed in student input.",
       "type": "string"
     },
     "limit-direction": {
+      "description": "Direction from which the index variable approaches the target for a limit operator.",
       "default": "two-sided",
       "enum": [
         "two-sided",
@@ -48,18 +55,22 @@
       ]
     },
     "allow-blank": {
+      "description": "Whether a wholly blank response is accepted instead of reported as missing input.",
       "default": "false",
       "enum": ["true", "false"]
     },
     "allow-complex": {
+      "description": "Whether complex numbers and the imaginary unit are allowed in symbolic component inputs.",
       "default": "false",
       "enum": ["true", "false"]
     },
     "show-help-text": {
+      "description": "Whether to show symbolic-entry help beside the body input.",
       "default": "true",
       "enum": ["true", "false"]
     },
     "grading-method": {
+      "description": "How the response is graded: exact compares canonical structure, component grades visible fields separately, and equivalent checks symbolic equivalence.",
       "default": "equivalent",
       "enum": [
         "exact",
@@ -68,31 +79,39 @@
       ]
     },
     "body-relative-weight": {
+      "description": "Weight of the body relative to each limit field, whose weight is 1, when using component grading.",
       "default": 3,
       "minimum": 1,
       "type": "integer"
     },
     "weight": {
+      "description": "Global question-score weight assigned to this element.",
       "default": 1,
       "type": "integer"
     },
     "correct-answer": {
+      "description": "Complete correct answer as a supported binder-aware SymPy expression; cannot be combined with component correct-answer attributes.",
       "type": "string",
       "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max)\\s*\\(.+\\)\\s*$"
     },
     "correct-answer-start": {
+      "description": "Correct lower-bound expression for the start field when using bounds limits.",
       "type": "string"
     },
     "correct-answer-end": {
+      "description": "Correct upper-bound expression for the end field when using bounds limits.",
       "type": "string"
     },
     "correct-answer-domain": {
+      "description": "Correct domain expression for the domain field when using domain limits.",
       "type": "string"
     },
     "correct-answer-target": {
+      "description": "Correct target expression for the target field when using approach limits.",
       "type": "string"
     },
     "correct-answer-body": {
+      "description": "Correct body expression when component correct-answer-... attributes are used.",
       "type": "string"
     }
   },
