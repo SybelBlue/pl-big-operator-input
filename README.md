@@ -55,10 +55,11 @@ Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<n
 Custom operators require an explicit `limits="bounds"` or `limits="domain"`
 because there is no meaningful automatic form. They are ungraded when no correct
 answer is supplied. A custom operator with a correct answer must use
-`grading-method="exact"`; symbolic equivalence is unavailable because arbitrary
-LaTeX does not identify a SymPy operation. Their canonical submissions include
-an additional `"operator_latex"` key so the stored response remains
-self-describing:
+`grading-method="exact"` or `grading-method="component"`; symbolic equivalence
+is unavailable because arbitrary LaTeX does not identify a SymPy operation.
+Component grading uses the same per-field weights as built-in operators. Their
+canonical submissions include an additional `"operator_latex"` key so the
+stored response remains self-describing:
 
 ```html
 <pl-big-operator-input
