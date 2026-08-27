@@ -13,7 +13,8 @@ Usage: scripts/update-release.sh [--push]
 Rebuild release from the contents and history of
 main:elements/pl-big-operator-input. The files under
 elements/pl-big-operator-input become the root of release, alongside
-main:.gitignore; nothing else from main is kept.
+main:.gitignore. Its README.md replaces the top-level README.md; nothing else
+from main is kept.
 
 Options:
   --push  Force-push the rebuilt branch to origin using --force-with-lease.
@@ -53,6 +54,12 @@ git cat-file -e "${source_branch}:elements/pl-big-operator-input" || {
   exit 1
 }
 
+git cat-file -e "${source_branch}:elements/pl-big-operator-input/README.md" || {
+  printf '%s does not contain elements/pl-big-operator-input/README.md.\n' \
+    "$source_branch" >&2
+  exit 1
+}
+
 git cat-file -e "${source_branch}:.gitignore" || {
   printf '%s does not contain .gitignore.\n' "$source_branch" >&2
   exit 1
@@ -77,13 +84,17 @@ GIT_INDEX_FILE="$temporary_index" git read-tree "${split_commit}^{tree}"
 gitignore_blob=$(git rev-parse "${source_branch}:.gitignore")
 GIT_INDEX_FILE="$temporary_index" git update-index \
   --add --cacheinfo "100644,${gitignore_blob},.gitignore"
+readme_blob=$(git rev-parse \
+  "${source_branch}:elements/pl-big-operator-input/README.md")
+GIT_INDEX_FILE="$temporary_index" git update-index \
+  --add --cacheinfo "100644,${readme_blob},README.md"
 target_tree=$(GIT_INDEX_FILE="$temporary_index" git write-tree)
 
 if [[ -n "$old_target" ]] &&
   [[ "$(git rev-parse "${old_target}^{tree}")" == "$target_tree" ]]; then
   generated_commit=$old_target
 else
-  generated_commit=$(printf 'Preserve .gitignore in %s\n' "$target_branch" |
+  generated_commit=$(printf 'Prepare %s release tree\n' "$target_branch" |
     GIT_AUTHOR_NAME="$(git show -s --format=%an "$source_branch")" \
       GIT_AUTHOR_EMAIL="$(git show -s --format=%ae "$source_branch")" \
       GIT_AUTHOR_DATE="$(git show -s --format=%aI "$source_branch")" \

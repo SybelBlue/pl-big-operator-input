@@ -2,13 +2,19 @@
 
 This directory is a course demo of a new element.
 
+## Instructors
+
 To include the element in your course, use:
 
 ```sh
-$ git submodule add -b release https://github.com/SybelBlue/pl-big-operator-input.git elements/pl-big-operator-input
+git clone --branch release https://github.com/SybelBlue/pl-big-operator-input.git elements/pl-big-operator-input
 ```
 
-## Developer Prerequisites
+### For details on the element, [read the `pl-big-operator-input` docs](elements/pl-big-operator-input/README.md)
+
+## Developers
+
+### Prerequisites
 
 Install the following tools before getting started:
 
@@ -18,7 +24,7 @@ Install the following tools before getting started:
 - [GNU Make](https://www.gnu.org/software/make/)
 - [Docker](https://www.docker.com/) (optional, for running PrairieLearn in a container)
 
-## Developer Quickstart
+### Developer Quickstart
 
 Clone the repository, enter its directory, and install the project dependencies:
 
@@ -30,6 +36,12 @@ Run the test suite:
 
 ```sh
 make test
+```
+
+Run the same full set of validation checks used by CI:
+
+```sh
+make ci-dryrun
 ```
 
 Start PrairieLearn for local development:
@@ -44,7 +56,7 @@ The development runner will print the local URL to open. To run the official Pra
 make docker
 ```
 
-## Repository layout
+### Repository layout
 
 ```text
 courseInstances/    Course instances and assessments
@@ -57,7 +69,7 @@ infoCourse.json     Course metadata, topics, tags, and modules
 
 Start customizing the template by updating `infoCourse.json`, the starter course instance under `courseInstances/StarterSemester`, and the example content under `questions/starter`.
 
-## Make targets
+### Make targets
 
 | Command | Description |
 | --- | --- |
@@ -67,6 +79,7 @@ Start customizing the template by updating `infoCourse.json`, the starter course
 | `make test-content` | Run question tests |
 | `make typecheck` | Type-check Python code with Pyright |
 | `make format` | Format Python, JSON, HTML, and Mustache files |
+| `make ci-dryrun` | Run tests, type checking, formatting checks, schema checks, and PrairieLearn pin validation |
 | `make dev` | Launch the local PrairieLearn development runner |
 | `make docker` | Launch PrairieLearn using the official Docker image |
 | `make fetch-pl-schemas` | Refresh the local PrairieLearn schemas |
@@ -80,11 +93,9 @@ Pass additional options to pytest with `PYTEST_ARGS`. For example:
 make test PYTEST_ARGS="-x -vv"
 ```
 
-## Typical development workflow
+### Typical development workflow
 
 1. Add or edit questions in `questions/`.
 2. Reference them from an assessment in `courseInstances/`.
 3. Preview the course with `make dev`.
-4. Run `make format`, `make typecheck`, and `make test` before committing.
-
-The default `make` target is `test`, so running `make` by itself executes the complete test suite.
+4. Run `make format` and `make ci-dryrun` before committing.
