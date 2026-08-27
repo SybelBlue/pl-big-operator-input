@@ -177,6 +177,82 @@ def test_domain_structured_answer_and_rendering():
     assert "Index domain" in rendered and "Big operator expression input" in rendered
 
 
+def test_prepare_parses_basic_component_correct_answer_strings():
+    state = data()
+    markup = html(
+        variables="n",
+        **{
+            "correct-answer-start": "1",
+            "correct-answer-end": "n",
+            "correct-answer-body": "k^2 + sin(n)",
+        },
+    )
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup), answer)
+    k, n = sympy.symbols("k n")
+    assert values == {"lower": 1, "upper": n, "body": k**2 + sympy.sin(n)}
+
+
+def test_prepare_parses_set_component_correct_answer_strings():
+    state = data()
+    markup = html(
+        operator="union",
+        **{"correct-answer-domain": "{1, 2}", "correct-answer-body": "{k}"},
+    )
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup), answer)
+    k = sympy.Symbol("k")
+    assert values == {
+        "domain": sympy.FiniteSet(1, 2),
+        "body": sympy.FiniteSet(k),
+    }
+
+
+def test_prepare_component_correct_answer_requires_every_visible_attribute():
+    with pytest.raises(ValueError, match="missing correct-answer-end"):
+        mod.prepare(
+            html(**{"correct-answer-start": "1", "correct-answer-body": "k"}),
+            data(),
+        )
+
+
+def test_prepare_component_correct_answer_enforces_set_fields():
+    with pytest.raises(ValueError, match='component "domain" must be a set'):
+        mod.prepare(
+            html(
+                operator="union",
+                **{"correct-answer-domain": "1", "correct-answer-body": "{k}"},
+            ),
+            data(),
+        )
+
+
+def test_prepare_rejects_irrelevant_component_correct_answer_attribute():
+    with pytest.raises(ValueError, match="cannot be used"):
+        mod.prepare(html(**{"correct-answer-domain": "{1}"}), data())
+
+
+def test_prepare_rejects_combined_whole_and_component_correct_answers():
+    with pytest.raises(ValueError, match="either"):
+        mod.prepare(
+            html(
+                **{
+                    "correct-answer": "Sum(k, (k, 1, 2))",
+                    "correct-answer-start": "1",
+                    "correct-answer-end": "2",
+                    "correct-answer-body": "k",
+                }
+            ),
+            data(),
+        )
+
+
 @pytest.mark.parametrize("operator", ["min", "max"])
 def test_min_max_correct_answer_rendering(operator):
     answer = canonical(operator=operator)
