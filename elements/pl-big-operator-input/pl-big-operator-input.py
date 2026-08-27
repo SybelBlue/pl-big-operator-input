@@ -137,20 +137,60 @@ def _raw_correct_answer(
     )
 
 
-def _infer_operator(raw: Any) -> str | None:
+def _binder_limits(value: Any) -> LimitFormat | None:
+    if isinstance(value, sympy.Limit):
+        return "approach"
+    if isinstance(value, (sympy.Sum, sympy.Product, sympy.Integral)):
+        if len(value.limits) != 1:
+            return None
+        binder_length = len(cast(Sequence[Any], value.limits[0]))
+        if binder_length == 2:
+            return "domain"
+        if binder_length == 3:
+            return "bounds"
+    return None
+
+
+def _infer_spec(raw: Any) -> tuple[str | None, LimitFormat | None]:
     if isinstance(raw, str):
         match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
-        return STRING_OPERATORS.get(match.group(1)) if match else None
+        operator = STRING_OPERATORS.get(match.group(1)) if match else None
+        if operator is None:
+            return None, None
+        if operator in FUNCTION_BINDERS:
+            function_name = FUNCTION_BINDERS[operator]
+            function = sympy.Function(function_name)
+            try:
+                value = sympy.sympify(raw, locals={function_name: function})  # type: ignore[call-overload]
+            except (sympy.SympifyError, TypeError, ValueError):
+                return operator, None
+            if value.func == function and len(value.args) == 2:
+                binder = value.args[1]
+                if isinstance(binder, sympy.Tuple):
+                    if len(binder) == 2:
+                        return operator, "domain"
+                    if len(binder) == 3:
+                        return operator, "bounds"
+            return operator, None
+        try:
+            value = _decode(raw)
+        except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
+            return operator, None
+        return operator, _binder_limits(value)
     if not isinstance(raw, dict):
-        return None
+        return None, None
     if raw.get("_type") == "operator_expression":
         operator = raw.get("operator")
-        return operator if operator in OPS else None
+        limits = raw.get("limits")
+        return (
+            operator if operator in OPS else None,
+            cast(LimitFormat, limits) if limits in COMPONENT_MAP else None,
+        )
     if raw.get("_type") == "sympy":
         try:
             value = _decode(raw)
         except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
-            return None
+            return None, None
         for operator, expected in {
             "sum": sympy.Sum,
             "product": sympy.Product,
@@ -158,8 +198,8 @@ def _infer_operator(raw: Any) -> str | None:
             "limit": sympy.Limit,
         }.items():
             if isinstance(value, expected):
-                return operator
-    return None
+                return operator, _binder_limits(value)
+    return None, None
 
 
 def _config(html: str, data: Any | None = None) -> Config:
@@ -171,6 +211,7 @@ def _config(html: str, data: Any | None = None) -> Config:
             raise ValueError(f'Required attribute "{name}" missing')
         required[name] = value.strip()
     explicit_operator = pl.get_string_attrib(element, "operator", None)
+    custom_latex = pl.get_string_attrib(element, "operator-latex", None)
     correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
     supplied_components: dict[Component, str] = {
         component: value
@@ -180,19 +221,22 @@ def _config(html: str, data: Any | None = None) -> Config:
     raw_correct = _raw_correct_answer(
         required["answers-name"], correct_attribute, supplied_components, data
     )
-    inferred_operator = None
-    if explicit_operator is None:
-        if not supplied_components and isinstance(raw_correct, (str, dict)):
-            inferred_operator = _infer_operator(raw_correct)
+    inferred_operator, inferred_limits = None, None
+    if not supplied_components and isinstance(raw_correct, (str, dict)):
+        inferred_operator, inferred_limits = _infer_spec(raw_correct)
+    if explicit_operator is None and custom_latex is None:
         if inferred_operator is None:
             raise ValueError(
                 'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
             )
-    operator = explicit_operator or inferred_operator
+    operator = (
+        explicit_operator
+        or ("custom" if custom_latex is not None else None)
+        or inferred_operator
+    )
     assert operator is not None
     if operator not in {*OPS, "custom"}:
         raise ValueError(f'Unknown operator "{operator}".')
-    custom_latex = pl.get_string_attrib(element, "operator-latex", None)
     if operator == "custom":
         if custom_latex is None or not custom_latex.strip():
             raise ValueError(
@@ -210,7 +254,12 @@ def _config(html: str, data: Any | None = None) -> Config:
         raise ValueError(
             'Custom operators require explicit limits="bounds" or limits="domain".'
         )
-    limits = OPS[operator][1] if limits == "auto" else limits
+    if limits == "auto":
+        limits = (
+            inferred_limits
+            if inferred_operator == operator and inferred_limits
+            else OPS[operator][1]
+        )
     allowed = (
         {"bounds", "domain"}
         if operator in FLEXIBLE or operator == "custom"
@@ -414,16 +463,33 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
                 "Correct answer Limit direction does not match limit-direction."
             )
         return _canonical(config, {"target": target, "body": body})
-    if len(value.limits) != 1 or len(value.limits[0]) != 3:
-        raise ValueError("Correct answer must have exactly one bounded index.")
-    variable, lower, upper = value.limits[0]
+    expected_length = 3 if config.limits == "bounds" else 2
+    if len(value.limits) != 1 or len(value.limits[0]) != expected_length:
+        raise ValueError(
+            f'Correct answer for limits="{config.limits}" must have exactly one '
+            f"{expected_length}-item binder."
+        )
+    variable, *binder_values = value.limits[0]
     if variable != index:
         raise ValueError("Correct answer index does not match index-variable.")
-    return _canonical(config, {"lower": lower, "upper": upper, "body": value.function})
+    if config.limits == "bounds":
+        return _canonical(
+            config,
+            {
+                "lower": binder_values[0],
+                "upper": binder_values[1],
+                "body": value.function,
+            },
+        )
+    return _canonical(config, {"domain": binder_values[0], "body": value.function})
 
 
 def _function_binder(config: Config, source: str) -> dict[str, Any] | None:
-    function_name = FUNCTION_BINDERS.get(config.operator)
+    function_name = (
+        "Custom"
+        if config.operator == "custom"
+        else FUNCTION_BINDERS.get(config.operator)
+    )
     if function_name is None:
         return None
     function = sympy.Function(function_name)
