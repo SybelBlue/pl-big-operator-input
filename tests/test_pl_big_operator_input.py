@@ -338,9 +338,7 @@ def test_prepare_does_not_populate_params_with_correct_answer():
 def test_prepare_does_not_use_correct_answer_backup_from_params():
     k = sympy.Symbol("k")
     state = data()
-    state["params"]["_pl_big_operator_input_correct_op"] = sympy.Sum(
-        k**2, (k, 1, 4)
-    )
+    state["params"]["_pl_big_operator_input_correct_op"] = sympy.Sum(k**2, (k, 1, 4))
 
     mod.prepare(html(operator="sum"), state)
 
