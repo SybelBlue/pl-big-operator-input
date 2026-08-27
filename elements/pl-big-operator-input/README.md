@@ -45,16 +45,16 @@ inconvenient.
 
 ## Operators and limits
 
-| Operator                            | LaTeX                             | Auto limits | Explicit limits |
-| ----------------------------------- | --------------------------------- | ----------- | --------------- |
-| sum                                 | $\sum$                            | bounds      | bounds, domain  |
-| product                             | $\prod$                           | bounds      | bounds, domain  |
-| integral                            | $\int$                            | bounds      | bounds, domain  |
-| limit                               | $\lim$                            | approach    | approach only   |
-| union, intersection, disjoint-union | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain      | bounds, domain  |
-| and, or                             | $\bigwedge$, $\bigvee$            | domain      | bounds, domain  |
-| min, max                            | $\min$, $\max$                    | domain      | bounds, domain  |
-| custom                              | ---                               | none        | bounds, domain  |
+| Operator                           | LaTeX                             | Auto limits | Explicit limits          |
+| ---------------------------------- | --------------------------------- | ----------- | ------------------------ |
+| Sum                                | $\sum$                            | bounds      | bounds, domain           |
+| Product                            | $\prod$                           | bounds      | bounds, domain           |
+| Integral                           | $\int$                            | bounds      | bounds, domain           |
+| Limit                              | $\lim$                            | approach    | approach only            |
+| Union, Intersection, DisjointUnion | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain      | bounds, domain           |
+| And, Or                            | $\bigwedge$, $\bigvee$            | domain      | bounds, domain           |
+| Min, Max                           | $\min$, $\max$                    | domain      | bounds, domain           |
+| Custom                             | ---                               | none        | bounds, domain, approach |
 
 Bounds forms collect a lower bound, an upper bound, and a body. Domain forms
 collect a domain and a body, while approach forms collect a target and a body.
@@ -62,14 +62,16 @@ The element displays and parses only the inputs required by the selected form.
 For a one-sided limit, the target is displayed with a `-` or `+`; the combined
 answer records the corresponding descriptive direction.
 
-Custom operators require an explicit `limits="bounds"` or `limits="domain"`
-because there is no meaningful automatic form. They are ungraded when no correct
-answer is supplied. A custom operator with a correct answer must use
+Custom operators require explicit `limits="bounds"`, `limits="domain"`, or
+`limits="approach"` because there is no meaningful automatic form. They are
+ungraded when no correct answer is supplied. A custom operator with a correct answer must use
 `grading-method="exact"` or `grading-method="component"`; symbolic equivalence
 is unavailable because arbitrary LaTeX does not identify a SymPy operation.
 For a whole correct answer, use the parseable syntax `Custom(body, limits)`,
-where `limits` is `(index, domain)` or `(index, lower, upper)` and matches the
-explicit limits form. Supplying `operator-latex` makes
+where `limits` is `(index, domain)`, `(index, lower, upper)`, or
+`(index, target, direction)` and matches the explicit limits form. Approach
+directions use the same `"+"`, `"-"`, and `"+-"` values as `Limit`. Supplying
+`operator-latex` makes
 the separate `operator="custom"` attribute optional.
 Component grading uses the same per-field weights as built-in operators. Their
 canonical submissions include an additional `"operator_latex"` key so the
@@ -83,6 +85,17 @@ stored response remains self-describing:
   index-variable="k"
   limits="domain"
   operator-latex="\mathbb{E}"
+></pl-big-operator-input>
+```
+
+```html
+<pl-big-operator-input
+  answers-name="evaluation"
+  correct-answer="Custom(f(x), (x, 0, '+-'))"
+  grading-method="component"
+  index-variable="x"
+  limits="approach"
+  operator-latex="\operatorname{eval}"
 ></pl-big-operator-input>
 ```
 
@@ -123,13 +136,15 @@ A domain integral can therefore omit both the operator and limits attributes:
 ></pl-big-operator-input>
 ```
 
-A two-sided limit uses an explicit `dir='+-'`; the operator, approach layout,
-and default `limit-direction="two-sided"` are inferred:
+A limit uses the parseable form `Limit(body, (index, target, direction))`.
+Valid direction strings are `"+"` (from the right), `"-"` (from the left), and
+`"+-"` (two-sided). For example, the operator, approach layout, and default
+`limit-direction="two-sided"` are inferred here:
 
 ```html
 <pl-big-operator-input
   answers-name="sinc-limit"
-  correct-answer="Limit(sin(x) / x, x, 0, dir='+-')"
+  correct-answer="Limit(sin(x) / x, (x, 0, '+-'))"
   index-variable="x"
 ></pl-big-operator-input>
 ```
@@ -212,12 +227,12 @@ student input:
 <!-- html repr of \sum_{k=1}^n k^2 -->
 <pl-big-operator-input
   answers-name="total"
-  operator="sum"
-  index-variable="k"
-  variables="n"
-  correct-answer-start="1"
-  correct-answer-end="n"
   correct-answer-body="k^2"
+  correct-answer-end="n"
+  correct-answer-start="1"
+  index-variable="k"
+  operator="sum"
+  variables="n"
 ></pl-big-operator-input>
 ```
 

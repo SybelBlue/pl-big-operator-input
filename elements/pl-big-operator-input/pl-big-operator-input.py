@@ -78,6 +78,10 @@ STRING_OPERATORS = {
     "Limit": "limit",
     **{name: operator for operator, name in FUNCTION_BINDERS.items()},
 }
+OPERATOR_FUNCTIONS = {
+    operator: function for function, operator in STRING_OPERATORS.items()
+}
+OPERATOR_FUNCTIONS["custom"] = "Custom"
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
 COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
@@ -149,26 +153,59 @@ def _binder_limits(value: Any) -> LimitFormat | None:
     return None
 
 
+def _split_top_level(source: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    quote: str | None = None
+    for position, character in enumerate(source):
+        if quote is not None:
+            if character == quote and (position == 0 or source[position - 1] != "\\"):
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        elif character == "," and depth == 0:
+            parts.append(source[start:position].strip())
+            start = position + 1
+    parts.append(source[start:].strip())
+    return parts
+
+
+def _formatted_call(source: str, function_name: str) -> tuple[str, list[str]] | None:
+    match = re.fullmatch(
+        rf"\s*{re.escape(function_name)}\s*\((.*)\)\s*", source, re.DOTALL
+    )
+    if match is None:
+        return None
+    arguments = _split_top_level(match.group(1))
+    if len(arguments) != 2:
+        return None
+    limits_source = arguments[1].strip()
+    if not (limits_source.startswith("(") and limits_source.endswith(")")):
+        return None
+    limits = _split_top_level(limits_source[1:-1])
+    return arguments[0], limits
+
+
 def _infer_spec(raw: Any) -> tuple[str | None, LimitFormat | None]:
     if isinstance(raw, str):
         match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
         operator = STRING_OPERATORS.get(match.group(1)) if match else None
         if operator is None:
             return None, None
-        if operator in FUNCTION_BINDERS:
-            function_name = FUNCTION_BINDERS[operator]
-            function = sympy.Function(function_name)
-            try:
-                value = sympy.sympify(raw, locals={function_name: function})  # type: ignore[call-overload]
-            except (sympy.SympifyError, TypeError, ValueError):
-                return operator, None
-            if value.func == function and len(value.args) == 2:
-                binder = value.args[1]
-                if isinstance(binder, sympy.Tuple):
-                    if len(binder) == 2:
-                        return operator, "domain"
-                    if len(binder) == 3:
-                        return operator, "bounds"
+        formatted = _formatted_call(raw, OPERATOR_FUNCTIONS[operator])
+        if formatted is not None:
+            if operator == "limit":
+                return operator, "approach"
+            limit_count = len(formatted[1])
+            if limit_count == 2:
+                return operator, "domain"
+            if limit_count == 3:
+                return operator, "bounds"
             return operator, None
         try:
             value = _decode(raw)
@@ -249,7 +286,7 @@ def _config(html: str, data: Any | None = None) -> Config:
     limits = pl.get_string_attrib(element, "limits", "auto") or "auto"
     if operator == "custom" and limits == "auto":
         raise ValueError(
-            'Custom operators require explicit limits="bounds" or limits="domain".'
+            'Custom operators require explicit limits="bounds", limits="domain", or limits="approach".'
         )
     if limits == "auto":
         limits = (
@@ -258,8 +295,10 @@ def _config(html: str, data: Any | None = None) -> Config:
             else OPS[operator][1]
         )
     allowed = (
-        {"bounds", "domain"}
-        if operator in FLEXIBLE or operator == "custom"
+        {"bounds", "domain", "approach"}
+        if operator == "custom"
+        else {"bounds", "domain"}
+        if operator in FLEXIBLE
         else {OPS[operator][1]}
     )
     if limits not in allowed:
@@ -464,7 +503,7 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
     if len(value.limits) != 1 or len(value.limits[0]) != expected_length:
         raise ValueError(
             f'Correct answer for limits="{config.limits}" must have exactly one '
-            f"{expected_length}-item binder."
+            f"{expected_length}-item limits tuple."
         )
     variable, *binder_values = value.limits[0]
     if variable != index:
@@ -481,38 +520,59 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
     return _canonical(config, {"domain": binder_values[0], "body": value.function})
 
 
-def _function_binder(config: Config, source: str) -> dict[str, Any] | None:
-    function_name = (
-        "Custom"
-        if config.operator == "custom"
-        else FUNCTION_BINDERS.get(config.operator)
-    )
-    if function_name is None:
+def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
+    formatted = _formatted_call(source, OPERATOR_FUNCTIONS[config.operator])
+    if formatted is None:
         return None
-    function = sympy.Function(function_name)
-    try:
-        value = sympy.sympify(source, locals={function_name: function})  # type: ignore[call-overload]
-    except (sympy.SympifyError, TypeError, ValueError) as exc:
-        raise ValueError("The correct answer contains invalid SymPy data.") from exc
-    if value.func != function or len(value.args) != 2:
-        return None
-    body, binder = value.args
-    if not isinstance(binder, sympy.Tuple):
-        return None
-    expected_length = 3 if config.limits == "bounds" else 2
-    if len(binder) != expected_length:
+    body_source, limits = formatted
+    expected_length = 2 if config.limits == "domain" else 3
+    if len(limits) != expected_length:
         raise ValueError(
             f'Correct answer for limits="{config.limits}" requires a '
-            f"{expected_length}-item binder tuple."
+            f"{expected_length}-item limits tuple."
         )
-    index = sympy.Symbol(config.index)
-    if binder[0] != index:
+    try:
+        body = _parse(
+            body_source, tuple(dict.fromkeys((*config.variables, config.index)))
+        )
+        index = sympy.sympify(limits[0])
+    except (sympy.SympifyError, TypeError, ValueError) as exc:
+        raise ValueError("The correct answer contains invalid SymPy data.") from exc
+    if index != sympy.Symbol(config.index):
         raise ValueError("Correct answer index does not match index-variable.")
-    if config.limits == "bounds":
-        return _canonical(
-            config, {"lower": binder[1], "upper": binder[2], "body": body}
+    if config.limits == "approach":
+        direction_source = limits[2].strip()
+        if (
+            len(direction_source) < 2
+            or direction_source[0] not in {"'", '"'}
+            or direction_source[-1] != direction_source[0]
+        ):
+            raise ValueError('Limit direction must be "+", "-", or "+-".')
+        direction = direction_source[1:-1]
+        public_direction = {value: key for key, value in DIRECTIONS.items()}.get(
+            direction
         )
-    return _canonical(config, {"domain": binder[1], "body": body})
+        if public_direction is None:
+            raise ValueError('Limit direction must be "+", "-", or "+-".')
+        if public_direction != config.direction:
+            raise ValueError("Correct answer direction does not match limit-direction.")
+        try:
+            target = _parse(limits[1], config.variables)
+        except (sympy.SympifyError, TypeError, ValueError) as exc:
+            raise ValueError("The correct answer contains invalid SymPy data.") from exc
+        return _canonical(config, {"target": target, "body": body})
+    if config.limits == "bounds":
+        try:
+            lower = _parse(limits[1], config.variables)
+            upper = _parse(limits[2], config.variables)
+        except (sympy.SympifyError, TypeError, ValueError) as exc:
+            raise ValueError("The correct answer contains invalid SymPy data.") from exc
+        return _canonical(config, {"lower": lower, "upper": upper, "body": body})
+    try:
+        domain = _parse(limits[1], config.variables)
+    except (sympy.SympifyError, TypeError, ValueError) as exc:
+        raise ValueError("The correct answer contains invalid SymPy data.") from exc
+    return _canonical(config, {"domain": domain, "body": body})
 
 
 def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
@@ -537,7 +597,7 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
     if config.correct_components:
         return _component_values(config, cast(dict[Component, Any], raw))
     if isinstance(raw, str):
-        converted = _function_binder(config, raw)
+        converted = _formatted_answer(config, raw)
         if converted is not None:
             return converted
     value = _decode(raw)
@@ -545,7 +605,7 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
     if converted is not None:
         return converted
     raise TypeError(
-        f'Correct answer "{config.answer}" must be a matching binder-aware object or canonical structured dictionary.'
+        f'Correct answer "{config.answer}" must be a matching formatted object or canonical structured dictionary.'
     )
 
 
