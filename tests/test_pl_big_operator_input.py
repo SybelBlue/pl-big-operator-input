@@ -61,7 +61,7 @@ def test_auto_limits(operator, limits):
         ("sum", "Sum(k**2, (k, 1, 4))", "bounds"),
         ("product", "Product(k, (k, 1, 4))", "bounds"),
         ("integral", "Integral(k, (k, 0, 1))", "bounds"),
-        ("limit", "Limit(sin(k) / k, k, 0, dir='+-')", "approach"),
+        ("limit", "Limit(sin(k) / k, (k, 0, '+-'))", "approach"),
         ("union", "Union({k}, (k, {1, 2}))", "domain"),
         ("intersection", "Intersection({k}, (k, {1, 2}))", "domain"),
         ("disjoint-union", "DisjointUnion({k}, (k, {1, 2}))", "domain"),
@@ -139,7 +139,7 @@ def test_uninferable_string_or_dictionary_requires_operator(correct):
 
 
 def test_explicit_operator_remains_authoritative():
-    with pytest.raises(TypeError, match="matching binder-aware"):
+    with pytest.raises(TypeError, match="matching formatted object"):
         mod.prepare(html(operator="sum"), data("Product(k, (k, 1, 4))"))
 
 
@@ -157,7 +157,7 @@ def test_inferred_operator_validates_explicit_limits():
         mod.prepare(
             html(
                 limits="bounds",
-                **{"correct-answer": "Limit(k, k, 0)"},
+                **{"correct-answer": "Limit(k, (k, 0, '+-'))"},
             ),
             data(),
         )
@@ -166,13 +166,36 @@ def test_inferred_operator_validates_explicit_limits():
 def test_inferred_limit_validates_and_preserves_direction():
     markup = html(
         **{
-            "correct-answer": "Limit(sin(k) / k, k, 0, dir='+')",
+            "correct-answer": "Limit(sin(k) / k, (k, 0, '+'))",
             "limit-direction": "from-right",
         },
     )
     state = data()
     mod.prepare(markup, state)
     assert state["correct_answers"]["op"]["direction"] == "from-right"
+
+
+@pytest.mark.parametrize(
+    ("direction", "public_direction"),
+    [("+", "from-right"), ("-", "from-left"), ("+-", "two-sided")],
+)
+def test_formatted_limit_accepts_documented_directions(direction, public_direction):
+    markup = html(
+        **{
+            "correct-answer": f"Limit(k**2, (k, 0, '{direction}'))",
+            "limit-direction": public_direction,
+        }
+    )
+    state = data()
+
+    mod.prepare(markup, state)
+
+    assert state["correct_answers"]["op"]["direction"] == public_direction
+
+
+def test_formatted_limit_rejects_unknown_direction():
+    with pytest.raises(ValueError, match='must be "\\+", "-", or "\\+-"'):
+        mod.prepare(html(**{"correct-answer": "Limit(k, (k, 0, 'sideways'))"}), data())
 
 
 def test_infers_domain_integral_from_two_item_binder():
@@ -1023,6 +1046,31 @@ def test_operator_latex_implies_custom_operator_for_whole_answer():
         "upper": sympy.Integer(4),
         "body": sympy.Symbol("j") ** 2,
     }
+
+
+def test_custom_operator_accepts_approach_syntax():
+    markup = html(
+        limits="approach",
+        **{
+            "operator-latex": r"\operatorname{eval}",
+            "limit-direction": "from-left",
+            "grading-method": "component",
+            "correct-answer": "Custom(j**2, (j, 0, '-'))",
+            "index-variable": "j",
+        },
+    )
+    state = data()
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup, state), answer)
+    assert answer["operator"] == "custom"
+    assert answer["limits"] == "approach"
+    assert answer["direction"] == "from-left"
+    assert values == {"target": sympy.Integer(0), "body": sympy.Symbol("j") ** 2}
+    state["panel"] = "answer"
+    assert r"\operatorname{eval}_{j\to 0^-} j^{2}" in mod.render(markup, state)
 
 
 def test_schema_accepts_implied_custom_operator():
