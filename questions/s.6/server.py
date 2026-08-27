@@ -9,7 +9,7 @@ def generate(data):
     coefficient = random.randint(1, 5)
     frequency = random.randint(1, 4)
     answer = sympy.Limit(
-        coefficient * sympy.sin(frequency * theta) / theta,
+        coefficient * sympy.sin(frequency * theta) / theta,  # type: ignore
         theta,
         0,
         dir="+",

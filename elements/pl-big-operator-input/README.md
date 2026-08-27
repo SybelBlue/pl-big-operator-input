@@ -28,8 +28,8 @@ inconvenient.
 | Attribute                                                                                                             | Default      | Meaning                                                                                                                                          |
 | --------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `answers-name`                                                                                                        | required     | Combined answer namespace.                                                                                                                       |
-| `index-variable`                                                                                                      | inferred     | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                       |
-| `operator`                                                                                                            | inferred     | A built-in operator, or `custom` for a custom LaTeX operator. The first letter is case-insensitive. When omitted, a whole string/dictionary correct answer must identify the operator. |
+| `index-variable`                                                                                                      | inferred     | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                        |
+| `operator`                                                                                                            | inferred     | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
 | `operator-latex`                                                                                                      | unset        | Custom operator LaTeX. When supplied without `operator`, it implies `operator="custom"`; invalid for built-in operators.                         |
 | `limits`                                                                                                              | `auto`       | `bounds`, `domain`, or `approach`; `auto` uses the table below.                                                                                  |
 | `limit-direction`                                                                                                     | `two-sided`  | `two-sided`, `from-left`, or `from-right` for limits.                                                                                            |
@@ -44,15 +44,15 @@ inconvenient.
 
 ## Operators and limits
 
-| Operator                           | LaTeX                             | Auto limits | Explicit limits          |
-| ---------------------------------- | --------------------------------- | ----------- | ------------------------ |
-| Sum                                | $\sum$                            | bounds      | bounds, domain           |
-| Product                            | $\prod$                           | bounds      | bounds, domain           |
-| Integral                           | $\int$                            | bounds      | bounds, domain           |
-| Limit                              | $\lim$                            | approach    | approach only            |
-| Union, Intersection, DisjointUnion | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain      | bounds, domain           |
-| And, Or                            | $\bigwedge$, $\bigvee$            | domain      | bounds, domain           |
-| Min, Max                           | $\min$, $\max$                    | domain      | bounds, domain           |
+| Operator                           | LaTeX                             | Auto limits                  | Explicit limits          |
+| ---------------------------------- | --------------------------------- | ---------------------------- | ------------------------ |
+| Sum                                | $\sum$                            | bounds                       | bounds, domain           |
+| Product                            | $\prod$                           | bounds                       | bounds, domain           |
+| Integral                           | $\int$                            | bounds                       | bounds, domain           |
+| Limit                              | $\lim$                            | approach                     | approach only            |
+| Union, Intersection, DisjointUnion | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain                       | bounds, domain           |
+| And, Or                            | $\bigwedge$, $\bigvee$            | domain                       | bounds, domain           |
+| Min, Max                           | $\min$, $\max$                    | domain                       | bounds, domain           |
 | Custom                             | ---                               | inferred from a whole answer | bounds, domain, approach |
 
 Bounds forms collect a lower bound, an upper bound, and a body. Domain forms
