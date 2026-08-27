@@ -139,7 +139,7 @@ document the adjustment; do not discard the structured representation.
 
 Parse each visible field independently with the existing PrairieLearn/SymPy
 parser and allowed-variable rules. Automatically allow `index-variable` in the
-body. Preserve useful parsing errors and `allow-blank` behavior.
+body. Preserve useful parsing errors and `allowed-blank` behavior.
 
 Implement the schema's grading methods:
 

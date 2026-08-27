@@ -84,6 +84,7 @@ OPERATOR_FUNCTIONS = {
 OPERATOR_FUNCTIONS["custom"] = "Custom"
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
+type AllowedBlank = Literal["none", "limits", "body", "all"]
 COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
     "bounds": ("lower", "upper", "body"),
     "domain": ("domain", "body"),
@@ -107,7 +108,7 @@ class Config:
     index: str
     variables: tuple[str, ...]
     direction: str
-    allow_blank: bool
+    allowed_blank: AllowedBlank
     allow_complex: bool
     show_help_text: bool
     grading: str
@@ -422,6 +423,11 @@ def _config(html: str, data: Any | None = None) -> Config:
     if direction not in DIRECTIONS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
     variables = pl.get_string_attrib(element, "variables", "") or ""
+    allowed_blank = pl.get_string_attrib(element, "allowed-blank", "none") or "none"
+    if allowed_blank not in {"none", "limits", "body", "all"}:
+        raise ValueError(
+            'Attribute "allowed-blank" must be none, limits, body, or all.'
+        )
     components = COMPONENT_MAP[cast(LimitFormat, limits)]
     irrelevant = set(supplied_components) - set(components)
     if irrelevant:
@@ -461,7 +467,7 @@ def _config(html: str, data: Any | None = None) -> Config:
         index,
         tuple(x.strip() for x in variables.split(",") if x.strip()),
         direction,
-        bool(pl.get_boolean_attrib(element, "allow-blank", False)),
+        cast(AllowedBlank, allowed_blank),
         bool(pl.get_boolean_attrib(element, "allow-complex", False)),
         bool(pl.get_boolean_attrib(element, "show-help-text", True)),
         grading,
@@ -915,9 +921,12 @@ def _is_set_input(value: sympy.Basic) -> bool:
     return isinstance(value, (sympy.Set, sympy.Symbol))
 
 
-def _blank(config: Config, raw: dict[str, Any] | None) -> bool:
-    raw = raw or {}
-    return all(not str(raw.get(config.name(c), "")).strip() for c in config.components)
+def _component_allows_blank(config: Config, component: Component) -> bool:
+    return config.allowed_blank == "all" or (
+        config.allowed_blank == "body"
+        if component == "body"
+        else config.allowed_blank == "limits"
+    )
 
 
 def _parse_values(
@@ -925,8 +934,14 @@ def _parse_values(
 ) -> dict[str, sympy.Basic] | None:
     submitted = data.setdefault("submitted_answers", {})
     result: dict[str, sympy.Basic] = {}
+    raw_answers = data.get("raw_submitted_answers", {})
     for component in config.components:
         name = config.name(component)
+        if not str(raw_answers.get(name, "")).strip() and _component_allows_blank(
+            config, component
+        ):
+            submitted[name] = ""
+            continue
         variables = (
             tuple(dict.fromkeys((*config.variables, config.index)))
             if component == "body"
@@ -971,14 +986,21 @@ def _parse_values(
 def parse(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
-    if _blank(config, data.get("raw_submitted_answers")):
-        submitted[config.answer] = "" if config.allow_blank else None
-        if not config.allow_blank:
-            errors = data.setdefault("format_errors", {})
-            for component in config.components:
-                name = config.name(component)
-                submitted[name] = None
-                errors[name] = "No submitted answer."
+    raw = data.get("raw_submitted_answers", {})
+    blank_components: list[Component] = [
+        component
+        for component in config.components
+        if not str(raw.get(config.name(component), "")).strip()
+    ]
+    if blank_components and all(
+        _component_allows_blank(config, component) for component in blank_components
+    ):
+        _parse_values(config, data)
+        errors = data.get("format_errors", {})
+        has_component_error = any(
+            config.name(component) in errors for component in config.components
+        )
+        submitted[config.answer] = None if has_component_error else ""
         return
     values = _parse_values(config, data)
     submitted[config.answer] = _canonical(config, values) if values else None
@@ -1040,7 +1062,7 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
     correct_json = _correct(config, data)
     if correct_json is None:
         return
-    if config.allow_blank and _blank(config, data.get("raw_submitted_answers")):
+    if data.get("submitted_answers", {}).get(config.answer) == "":
         score = 0.0
     else:
         submitted_json = data.get("submitted_answers", {}).get(config.answer)

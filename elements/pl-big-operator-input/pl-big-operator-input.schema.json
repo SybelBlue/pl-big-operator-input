@@ -53,10 +53,10 @@
         "from-right"
       ]
     },
-    "allow-blank": {
-      "description": "Whether a wholly blank response is accepted instead of reported as missing input.",
-      "default": "false",
-      "enum": ["true", "false"]
+    "allowed-blank": {
+      "description": "Which portions of the response may be blank: none, limits, body, or all.",
+      "default": "none",
+      "enum": ["none", "limits", "body", "all"]
     },
     "allow-complex": {
       "description": "Whether complex numbers and the imaginary unit are allowed in symbolic component inputs.",
