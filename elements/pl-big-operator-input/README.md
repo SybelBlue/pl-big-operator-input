@@ -30,6 +30,7 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 | `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
 | `variables` | empty | Comma-separated extra allowed symbols. |
 | `allow-blank` | `false` | Permit a wholly blank response. |
+| `show-help-text` | `true` | Show symbolic-entry help beside the body input. Set to `false` to hide it. |
 | `grading-method` | `equivalent` | `exact`, `component`, or `equivalent`. |
 | `body-relative-weight` | `3` | Body weight in component grading; every limit component has weight 1. |
 | `weight` | `1` | PrairieLearn score weight. |

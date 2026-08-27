@@ -55,6 +55,10 @@
       "default": "false",
       "enum": ["true", "false"]
     },
+    "show-help-text": {
+      "default": "true",
+      "enum": ["true", "false"]
+    },
     "grading-method": {
       "default": "equivalent",
       "enum": [

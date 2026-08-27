@@ -41,6 +41,7 @@ def markup(
     size: int,
     allow_sets: bool,
     allow_complex: bool,
+    show_help_text: bool = False,
     prefix: str | None = None,
     suffix: str | None = None,
 ) -> str:
@@ -49,7 +50,7 @@ def markup(
         "answers-name": name,
         "variables": ",".join(variables),
         "formula-editor": "true",
-        "show-help-text": "false",
+        "show-help-text": str(show_help_text).lower(),
         "show-score": "false",
         "placeholder": "",
         "size": str(size),

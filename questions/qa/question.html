@@ -5,7 +5,7 @@
 <div class="table-responsive">
     <table class="table table-bordered align-middle">
         <thead>
-            <tr>
+            <tr class="sticky-top bg-white">
                 <th scope="col" style="width: 15rem; min-width: 15rem; max-width: 15rem">
                     Description
                 </th>
@@ -193,8 +193,28 @@
             </tr>
             <tr>
                 <td>
+                    Right-hand limit<br>
+                    <small>
+                        <code>grading-method="equivalent"</code> (default)
+                    </small>
+                </td>
+                <td>$\displaystyle \lim_{x \to 0^+} \frac{\sin x}{x}$</td>
+                <td>
+                    <pl-big-operator-input
+                        answers-name="limit"
+                        operator="limit"
+                        index-variable="x"
+                        limit-direction="from-right"
+                        allow-blank="true"
+                    ></pl-big-operator-input>
+                </td>
+            </tr>
+            <tr>
+                <td>
                     Custom direct sum<br>
-                    <small><code>grading-method="exact"</code></small>
+                    <small>
+                        <code>grading-method="exact"</code>
+                    </small>
                 </td>
                 <td>$\displaystyle \bigoplus_{j=1}^{4} j^2$</td>
                 <td>
@@ -208,24 +228,6 @@
                         correct-answer-start="1"
                         correct-answer-end="4"
                         correct-answer-body="j^2"
-                        allow-blank="true"
-                    ></pl-big-operator-input>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Right-hand limit<br>
-                    <small>
-                        <code>grading-method="equivalent"</code> (default)
-                    </small>
-                </td>
-                <td>$\displaystyle \lim_{x \to 0^+} \frac{\sin x}{x}$</td>
-                <td>
-                    <pl-big-operator-input
-                        answers-name="limit"
-                        operator="limit"
-                        index-variable="x"
-                        limit-direction="from-right"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>

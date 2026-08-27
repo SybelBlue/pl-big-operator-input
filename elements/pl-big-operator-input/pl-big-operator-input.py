@@ -89,6 +89,7 @@ class Config:
     direction: str
     allow_blank: bool
     allow_complex: bool
+    show_help_text: bool
     grading: str
     body_weight: int
     weight: int
@@ -205,6 +206,7 @@ def _config(html: str) -> Config:
         direction,
         bool(pl.get_boolean_attrib(element, "allow-blank", False)),
         bool(pl.get_boolean_attrib(element, "allow-complex", False)),
+        bool(pl.get_boolean_attrib(element, "show-help-text", True)),
         grading,
         body_weight,
         int(pl.get_integer_attrib(element, "weight", 1) or 1),
@@ -413,6 +415,7 @@ def _field(
         size=size,
         allow_sets=_requires_set(config, cast(Component, component)),
         allow_complex=config.allow_complex,
+        show_help_text=component == "body" and config.show_help_text,
         prefix=prefix,
         suffix=suffix,
     )
