@@ -479,6 +479,35 @@ def test_non_set_combinator_bodies_still_accept_expressions():
     assert "format_errors" not in state
 
 
+def test_parse_does_not_add_render_or_grade_phase_data_keys():
+    state = {
+        "params": {},
+        "correct_answers": {},
+        "submitted_answers": {
+            "op-start": "1",
+            "op-end": "4",
+            "op-body": "k^2",
+        },
+        "feedback": {},
+        "format_errors": {},
+        "raw_submitted_answers": {
+            "op-start": "1",
+            "op-end": "4",
+            "op-body": "k^2",
+        },
+        "variant_seed": 1,
+        "options": {},
+        "preferences": {},
+        "gradable": True,
+    }
+
+    mod.parse(html(), state)
+
+    assert state["submitted_answers"]["op"]["_type"] == "operator_expression"
+    assert "partial_scores" not in state
+    assert "panel" not in state
+
+
 def test_component_grading_weights_body():
     k = sympy.Symbol("k")
     correct = sympy.Sum(k**2, (k, 1, 4))
@@ -737,9 +766,7 @@ def test_bounds_upper_field_restores_left_border_radius():
     assert "pl-big-operator-input__range-upper-bound" not in integral_rendered
 
     css = (HERE / "pl-big-operator-input.css").read_text()
-    selector = (
-        ".pl-big-operator-input__range-upper-bound .input-group > math-field"
-    )
+    selector = ".pl-big-operator-input__range-upper-bound .input-group > math-field"
     assert selector in css
     assert "border-top-left-radius: var(--bs-border-radius) !important" in css
     assert "border-bottom-left-radius: var(--bs-border-radius) !important" in css
