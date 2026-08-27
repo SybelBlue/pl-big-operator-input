@@ -29,7 +29,7 @@ string as above, or serialize them with `prairielearn.sympy_utils.sympy_to_json`
 | `answers-name` | required | Combined answer namespace. |
 | `index-variable` | required | Bound symbol; automatically allowed in the body. |
 | `operator` | inferred | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
-| `operator-latex` | unset | Required LaTeX operator when `operator="custom"`; invalid for built-in operators. |
+| `operator-latex` | unset | Custom operator LaTeX. When supplied without `operator`, it implies `operator="custom"`; invalid for built-in operators. |
 | `limits` | `auto` | `bounds`, `domain`, or `approach`; `auto` uses the table below. |
 | `limit-direction` | `two-sided` | `two-sided`, `from-left`, or `from-right` for limits. |
 | `variables` | empty | Comma-separated extra allowed symbols. |
@@ -65,6 +65,9 @@ because there is no meaningful automatic form. They are ungraded when no correct
 answer is supplied. A custom operator with a correct answer must use
 `grading-method="exact"` or `grading-method="component"`; symbolic equivalence
 is unavailable because arbitrary LaTeX does not identify a SymPy operation.
+For a whole correct answer, use the inert syntax `Custom(body, binder)`, where
+the binder matches the explicit limits form. Supplying `operator-latex` makes
+the separate `operator="custom"` attribute optional.
 Component grading uses the same per-field weights as built-in operators. Their
 canonical submissions include an additional `"operator_latex"` key so the
 stored response remains self-describing:
@@ -91,12 +94,28 @@ with `Sum`, `Product`, `Integral`, `Limit`, `Union`, `Intersection`,
 `DisjointUnion`, `And`, `Or`, `Min`, or `Max`. A canonical dictionary uses its
 `operator` field, while a PrairieLearn SymPy JSON dictionary can identify the
 binder-aware `Sum`, `Product`, `Integral`, and `Limit` classes.
+For binder-bearing answers, a two-item integral binder `(index, domain)` selects
+`limits="domain"`, a three-item binder `(index, lower, upper)` selects
+`limits="bounds"`, and a `Limit` selects `limits="approach"`. The inert
+variadic syntax described below uses the same binder-arity rule. An explicit
+`limits` attribute remains authoritative and must agree with the answer.
 
 ```html
 <pl-big-operator-input
   answers-name="total"
   index-variable="k"
   correct-answer="Product(k, (k, 1, 4))"
+></pl-big-operator-input>
+```
+
+A domain integral can therefore omit both the operator and limits attributes:
+
+```html
+<pl-big-operator-input
+  answers-name="contour"
+  correct-answer="Integral(z, (z, Gamma))"
+  index-variable="z"
+  variables="Gamma"
 ></pl-big-operator-input>
 ```
 
@@ -131,7 +150,7 @@ Every prepared or parsed combined answer is a flat version 1 dictionary. Mathema
 }
 ```
 
-- Rnage answers use `lower` and `upper`, as seen above.
+- Range answers use `lower` and `upper`, as seen above.
 - Domain answers replace `lower` and `upper` with `domain`.
 - Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
 - Custom submissions use the same form-dependent components and add `"operator_latex"`; built-in answers do not include that key.
@@ -161,10 +180,11 @@ the values to the canonical representation during `prepare()`. The index
 variable is automatically available when parsing the body; other symbols must
 be listed in `variables`.
 
-String or `sympy_to_json` representations of bounded `sympy.Sum`,
+String or `sympy_to_json` representations of single-binder `sympy.Sum`,
 `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as
-author conveniences and normalized during `prepare()`. Do not put the raw
-SymPy objects in `data`, because PrairieLearn question data must remain
+author conveniences and normalized during `prepare()`. Two-item integral
+binders become domain forms and three-item binders become bounds forms. Do not
+put raw SymPy objects in `data`, because PrairieLearn question data must remain
 JSON-serializable. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`,
 `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never
 accepted as substitutes for it.

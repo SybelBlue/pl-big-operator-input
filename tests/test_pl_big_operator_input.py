@@ -175,6 +175,67 @@ def test_inferred_limit_validates_and_preserves_direction():
     assert state["correct_answers"]["op"]["direction"] == "from-right"
 
 
+def test_infers_domain_integral_from_two_item_binder():
+    markup = html(
+        variables="Gamma",
+        **{"correct-answer": "Integral(z, (z, Gamma))", "index-variable": "z"},
+    )
+    state = data()
+
+    mod.prepare(markup, state)
+
+    inferred = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup, state), inferred)
+    assert inferred["operator"] == "integral"
+    assert inferred["limits"] == "domain"
+    assert values == {"domain": sympy.Symbol("Gamma"), "body": sympy.Symbol("z")}
+
+
+def test_infers_domain_integral_from_sympy_json():
+    z, gamma = sympy.symbols("z Gamma")
+    state = data(mod.psu.sympy_to_json(sympy.Integral(z, (z, gamma))))
+
+    mod.prepare(html(variables="Gamma", **{"index-variable": "z"}), state)
+
+    assert state["correct_answers"]["op"]["operator"] == "integral"
+    assert state["correct_answers"]["op"]["limits"] == "domain"
+
+
+def test_infers_bounds_from_three_item_variadic_binder():
+    markup = html(**{"correct-answer": "Max(k**2, (k, 1, 4))"})
+    state = data()
+
+    mod.prepare(markup, state)
+
+    assert state["correct_answers"]["op"]["operator"] == "max"
+    assert state["correct_answers"]["op"]["limits"] == "bounds"
+
+
+def test_whole_domain_integral_matches_component_answer():
+    whole_markup = html(
+        variables="Gamma",
+        **{"correct-answer": "Integral(z, (z, Gamma))", "index-variable": "z"},
+    )
+    component_markup = html(
+        operator="integral",
+        limits="domain",
+        variables="Gamma",
+        **{
+            "index-variable": "z",
+            "correct-answer-domain": "Gamma",
+            "correct-answer-body": "z",
+        },
+    )
+    whole_state, component_state = data(), data()
+
+    mod.prepare(whole_markup, whole_state)
+    mod.prepare(component_markup, component_state)
+
+    assert (
+        whole_state["correct_answers"]["op"] == component_state["correct_answers"]["op"]
+    )
+
+
 @pytest.mark.parametrize("limits", ["bounds", "domain"])
 def test_custom_operator_requires_explicit_supported_limits(limits):
     config = mod._config(
@@ -919,6 +980,49 @@ def test_custom_operator_component_grading():
     mod.grade(markup, state)
 
     assert state["partial_scores"]["op"] == {"score": pytest.approx(0.75), "weight": 1}
+
+
+def test_operator_latex_implies_custom_operator_for_whole_answer():
+    markup = html(
+        limits="bounds",
+        **{
+            "operator-latex": r"{ \Huge\bigstar{} }",
+            "grading-method": "component",
+            "correct-answer": "Custom(j**2, (j, 1, 4))",
+            "index-variable": "j",
+        },
+    )
+    state = data()
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup, state), answer)
+    assert answer["operator"] == "custom"
+    assert answer["operator_latex"] == r"{ \Huge\bigstar{} }"
+    assert values == {
+        "lower": sympy.Integer(1),
+        "upper": sympy.Integer(4),
+        "body": sympy.Symbol("j") ** 2,
+    }
+
+
+def test_schema_accepts_implied_custom_operator():
+    markup = html(
+        limits="bounds",
+        **{
+            "operator-latex": r"{ \Huge\bigstar{} }",
+            "grading-method": "component",
+            "correct-answer": "Custom(j**2, (j, 1, 4))",
+            "index-variable": "j",
+            "allow-blank": "true",
+        },
+    )
+
+    mod.pl.validate_element(
+        mod.lxml.html.fragment_fromstring(markup),
+        HERE / "pl-big-operator-input.schema.json",
+    )
 
 
 def test_custom_operator_correct_answer_panel_renders_complete_notation():
