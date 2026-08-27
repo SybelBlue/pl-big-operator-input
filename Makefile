@@ -4,6 +4,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := test
 
 UV_CACHE_DIR ?= /private/tmp/learnvia_uv_cache
+PL_REF ?= master
 
 LIB_TEST_PATHS := elements/**/tests
 SCRIPT_TEST_PATHS := scripts/tests

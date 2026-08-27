@@ -51,7 +51,7 @@ def test_replace_pyproject_commit_updates_only_declared_revision(tmp_path, monke
     pyproject.write_text(
         "[tool.uv.sources.prairielearn]\n"
         'git = "https://example.invalid/PrairieLearn.git"\n'
-        f'rev = "{old}"\n'
+        f'rev = "{old}" # keep this comment\n'
         'subdirectory = "apps/prairielearn/python"\n'
     )
     monkeypatch.setattr(pin, "PYPROJECT", pyproject)
@@ -59,6 +59,7 @@ def test_replace_pyproject_commit_updates_only_declared_revision(tmp_path, monke
     pin.replace_pyproject_commit(new)
 
     assert f'rev = "{new}"' in pyproject.read_text()
+    assert "# keep this comment" in pyproject.read_text()
     assert old not in pyproject.read_text()
 
 
@@ -77,3 +78,13 @@ def test_clone_source_propagates_invalid_ref_failure(tmp_path, monkeypatch):
     with pytest.raises(subprocess.CalledProcessError):
         pin.clone_source("https://example.invalid/repo.git", "missing", tmp_path)
     assert calls == 3
+
+
+def test_main_defaults_update_to_master(monkeypatch):
+    requested_refs = []
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+    monkeypatch.setattr(pin, "update", requested_refs.append)
+
+    pin.main()
+
+    assert requested_refs == ["master"]

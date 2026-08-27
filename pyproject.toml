@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "template"
-version = "0.1.0"
+version = "1.1.0"
 requires-python = ">=3.13"
 dependencies = ["prairielearn", "chevron", "lxml"]
 
 [tool.uv.sources.prairielearn]
 git = "https://github.com/PrairieLearn/PrairieLearn.git"
-rev = "2c60f70a0ef817a2dc33fe15cb8e56de5035d6ed"
+rev = "14e65830861bee4cfe10c3ef73b000794edd66ed" # delibrately pinned for vendored pl-symbolic-input
 subdirectory = "apps/prairielearn/python"
 
 
@@ -19,7 +19,7 @@ dev = ["ipython", "pyright", "pytest", "ruff"]
 
 [tool.pyright]
 include = ["elements", "questions", "scripts", "src"]
-exclude = ["elements/pl-big-operator-input/vendor"]
+exclude = ["**/vendor", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
 
 [tool.ruff]
-exclude = ["elements/pl-big-operator-input/vendor"]
+exclude = ["**/vendor"]

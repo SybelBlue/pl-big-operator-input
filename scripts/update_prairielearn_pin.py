@@ -20,6 +20,7 @@ PYPROJECT = ROOT / "pyproject.toml"
 UV_LOCK = ROOT / "uv.lock"
 DEFAULT_REPOSITORY = "https://github.com/PrairieLearn/PrairieLearn.git"
 DEFAULT_SOURCE_PATH = Path("apps/prairielearn/elements/pl-symbolic-input")
+DEFAULT_UPDATE_REF = "master"
 
 
 def run(*args: str, cwd: Path | None = None) -> str:
@@ -82,7 +83,7 @@ def directories_equal(left: Path, right: Path) -> bool:
 
 def pinned_pyproject_commit() -> str | None:
     match = re.search(
-        r'\[tool\.uv\.sources\.prairielearn\][\s\S]*?^rev = "([0-9a-f]{40})"$',
+        r'\[tool\.uv\.sources\.prairielearn\][\s\S]*?^rev = "([0-9a-f]{40})"(?:\s+#.*)?$',
         PYPROJECT.read_text(),
         re.MULTILINE,
     )
@@ -100,7 +101,7 @@ def locked_commit() -> str | None:
 def replace_pyproject_commit(commit: str) -> None:
     text = PYPROJECT.read_text()
     updated, count = re.subn(
-        r'(\[tool\.uv\.sources\.prairielearn\][\s\S]*?^rev = ")[0-9a-f]{40}("$)',
+        r'(\[tool\.uv\.sources\.prairielearn\][\s\S]*?^rev = ")[0-9a-f]{40}("(?:\s+#.*)?$)',
         rf"\g<1>{commit}\g<2>",
         text,
         count=1,
@@ -175,7 +176,7 @@ def main() -> None:
     if args.check:
         verify(args.ref)
     else:
-        update(args.ref or "main")
+        update(args.ref or DEFAULT_UPDATE_REF)
 
 
 if __name__ == "__main__":
