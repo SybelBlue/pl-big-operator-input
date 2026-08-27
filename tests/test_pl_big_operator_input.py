@@ -390,6 +390,17 @@ def test_bare_variables_are_accepted_as_symbolic_sets():
     assert "format_errors" not in union
 
 
+def test_allow_complex_is_delegated_to_symbolic_inputs():
+    markup = html(variables="j", **{"allow-complex": "false"})
+    state = data(raw={"op-start": "1", "op-end": "4", "op-body": "j^2"})
+
+    mod.parse(markup, state)
+
+    assert state["submitted_answers"]["op"] is not None
+    assert "format_errors" not in state
+    assert mod._config(markup).allow_complex is False
+
+
 @pytest.mark.parametrize(
     ("invalid_field", "valid_field"),
     [("op-domain", "op-body"), ("op-body", "op-domain")],

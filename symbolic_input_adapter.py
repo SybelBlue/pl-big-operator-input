@@ -40,6 +40,7 @@ def markup(
     label: str,
     size: int,
     allow_sets: bool,
+    allow_complex: bool,
     prefix: str | None = None,
     suffix: str | None = None,
 ) -> str:
@@ -54,6 +55,7 @@ def markup(
         "size": str(size),
         "aria-label": label,
         "allow-sets": str(allow_sets).lower(),
+        "allow-complex": str(allow_complex).lower(),
     }
     if prefix is not None:
         attributes["label"] = prefix

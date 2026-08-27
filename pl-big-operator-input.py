@@ -88,6 +88,7 @@ class Config:
     variables: tuple[str, ...]
     direction: str
     allow_blank: bool
+    allow_complex: bool
     grading: str
     body_weight: int
     weight: int
@@ -203,6 +204,7 @@ def _config(html: str) -> Config:
         tuple(x.strip() for x in variables.split(",") if x.strip()),
         direction,
         bool(pl.get_boolean_attrib(element, "allow-blank", False)),
+        bool(pl.get_boolean_attrib(element, "allow-complex", False)),
         grading,
         body_weight,
         int(pl.get_integer_attrib(element, "weight", 1) or 1),
@@ -410,6 +412,7 @@ def _field(
         label=label,
         size=size,
         allow_sets=_requires_set(config, cast(Component, component)),
+        allow_complex=config.allow_complex,
         prefix=prefix,
         suffix=suffix,
     )
@@ -585,6 +588,7 @@ def _parse_values(
             }[component],
             size=16 if component == "body" else 10,
             allow_sets=_requires_set(config, component),
+            allow_complex=config.allow_complex,
         )
         symbolic_input_adapter.parse(field_markup, data)
         raw_value = submitted.get(name)
@@ -593,7 +597,11 @@ def _parse_values(
         try:
             value = cast(
                 sympy.Basic,
-                psu.json_to_sympy(cast(Any, raw_value), allow_sets=True),
+                psu.json_to_sympy(
+                    cast(Any, raw_value),
+                    allow_sets=True,
+                    allow_complex=config.allow_complex,
+                ),
             )
             if _requires_set(config, component) and not _is_set_input(value):
                 data.setdefault("format_errors", {})[name] = "This field must be a set."
