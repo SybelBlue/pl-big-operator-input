@@ -11,9 +11,10 @@ usage() {
 Usage: scripts/update-release.sh [--push]
 
 Rebuild release from the contents and history of
-main:elements/pl-sum-notation-input. The files under
-elements/pl-sum-notation-input become the root of release, alongside
-main:.gitignore; nothing else from main is kept.
+main:elements/pl-big-operator-input. The files under
+elements/pl-big-operator-input become the root of release, alongside
+main:.gitignore. Its README.md replaces the top-level README.md; nothing else
+from main is kept.
 
 Options:
   --push  Force-push the rebuilt branch to origin using --force-with-lease.
@@ -47,8 +48,14 @@ git rev-parse --verify --quiet "${source_branch}^{commit}" >/dev/null || {
   exit 1
 }
 
-git cat-file -e "${source_branch}:elements/pl-sum-notation-input" || {
-  printf '%s does not contain elements/pl-sum-notation-input.\n' \
+git cat-file -e "${source_branch}:elements/pl-big-operator-input" || {
+  printf '%s does not contain elements/pl-big-operator-input.\n' \
+    "$source_branch" >&2
+  exit 1
+}
+
+git cat-file -e "${source_branch}:elements/pl-big-operator-input/README.md" || {
+  printf '%s does not contain elements/pl-big-operator-input/README.md.\n' \
     "$source_branch" >&2
   exit 1
 }
@@ -66,7 +73,7 @@ fi
 
 old_target=$(git rev-parse --verify --quiet "refs/heads/${target_branch}" ||
   git rev-parse --verify --quiet "refs/remotes/origin/${target_branch}" || true)
-split_commit=$(git subtree split --prefix=elements/pl-sum-notation-input \
+split_commit=$(git subtree split --prefix=elements/pl-big-operator-input \
   "$source_branch")
 
 temporary_directory=$(mktemp -d)
@@ -77,13 +84,17 @@ GIT_INDEX_FILE="$temporary_index" git read-tree "${split_commit}^{tree}"
 gitignore_blob=$(git rev-parse "${source_branch}:.gitignore")
 GIT_INDEX_FILE="$temporary_index" git update-index \
   --add --cacheinfo "100644,${gitignore_blob},.gitignore"
+readme_blob=$(git rev-parse \
+  "${source_branch}:elements/pl-big-operator-input/README.md")
+GIT_INDEX_FILE="$temporary_index" git update-index \
+  --add --cacheinfo "100644,${readme_blob},README.md"
 target_tree=$(GIT_INDEX_FILE="$temporary_index" git write-tree)
 
 if [[ -n "$old_target" ]] &&
   [[ "$(git rev-parse "${old_target}^{tree}")" == "$target_tree" ]]; then
   generated_commit=$old_target
 else
-  generated_commit=$(printf 'Preserve .gitignore in %s\n' "$target_branch" |
+  generated_commit=$(printf 'Prepare %s release tree\n' "$target_branch" |
     GIT_AUTHOR_NAME="$(git show -s --format=%an "$source_branch")" \
       GIT_AUTHOR_EMAIL="$(git show -s --format=%ae "$source_branch")" \
       GIT_AUTHOR_DATE="$(git show -s --format=%aI "$source_branch")" \
@@ -107,7 +118,7 @@ if [[ "$target_tree" != "$actual_target_tree" ]]; then
   exit 1
 fi
 
-printf 'Updated %s to %s from %s:elements/pl-sum-notation-input.\n' \
+printf 'Updated %s to %s from %s:elements/pl-big-operator-input.\n' \
   "$target_branch" "$generated_commit" "$source_branch"
 
 if [[ "$push" == true ]]; then

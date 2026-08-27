@@ -49,3 +49,18 @@ jobs:
 
       - name: Test
         run: make test
+
+  prairielearn-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Verify PrairieLearn pin
+        run: make check-prairielearn-pin
