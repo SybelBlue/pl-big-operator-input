@@ -480,6 +480,29 @@ def test_question_fields_are_rendered_by_vendored_symbolic_input():
     assert 'aria-label="Lower bound"' in rendered
     assert 'aria-label="Upper bound"' in rendered
     assert 'aria-label="Operator body"' in rendered
+    assert rendered.count('title="Symbolic"') == 1
+
+
+def test_body_help_text_can_be_disabled():
+    rendered = mod.render(html(**{"show-help-text": "false"}), data())
+
+    assert 'title="Symbolic"' not in rendered
+
+    document = mod.lxml.html.fragment_fromstring(rendered)
+    body = document.get_element_by_id("symbolic-input-op-body")
+    assert body.getnext() is None
+
+
+def test_body_right_edge_is_rounded_only_when_it_has_no_trailing_control():
+    css = (HERE / "pl-big-operator-input.css").read_text()
+
+    assert ".pl-big-operator-input__body math-field {" in css
+    assert "border-radius: var(--bs-border-radius) !important" not in css
+    assert (
+        ".pl-big-operator-input__body .input-group > math-field:last-child" in css
+    )
+    assert "border-top-right-radius: var(--bs-border-radius) !important" in css
+    assert "border-bottom-right-radius: var(--bs-border-radius) !important" in css
 
 
 def test_non_set_combinator_bodies_still_accept_expressions():
