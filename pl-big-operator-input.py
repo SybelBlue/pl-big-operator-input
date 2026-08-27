@@ -391,16 +391,13 @@ def _function_binder(config: Config, source: str) -> dict[str, Any] | None:
 
 
 def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
-    prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
     raw = (
         dict(config.correct_components)
         if config.correct_components
         else (
             config.correct_attribute
             if config.correct_attribute is not None
-            else data.get("correct_answers", {}).get(
-                config.answer, data.get("params", {}).get(prepared_key)
-            )
+            else data.get("correct_answers", {}).get(config.answer)
         )
     )
     if (
@@ -435,9 +432,6 @@ def prepare(element_html: str, data: pl.QuestionData) -> None:
     correct = _correct(config, data)
     if correct is not None:
         data.setdefault("correct_answers", {})[config.answer] = correct
-        data.setdefault("params", {})[
-            f"_pl_big_operator_input_correct_{config.answer}"
-        ] = correct
 
 
 def _field(
