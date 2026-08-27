@@ -92,6 +92,25 @@
             </tr>
             <tr>
                 <td>
+                    Trigonometric integral with Greek index<br>
+                    <small>
+                        <code>grading-method="component"</code>
+                    </small>
+                </td>
+                <td>$\displaystyle \int_{0}^{\pi} \sin(\theta)\,d\theta$</td>
+                <td>
+                    <pl-big-operator-input
+                        answers-name="trig-integral"
+                        operator="integral"
+                        index-variable="theta"
+                        correct-answer="Integral(sin(theta), (theta, 0, pi))"
+                        grading-method="component"
+                        allow-blank="true"
+                    ></pl-big-operator-input>
+                </td>
+            </tr>
+            <tr>
+                <td>
                     Domain-indexed minimum<br>
                     <small>
                         <code>grading-method="equivalent"</code> (default)
