@@ -411,9 +411,13 @@ def test_custom_operator_requires_nonempty_latex():
         mod.prepare(html(operator="custom", limits="bounds"), data())
 
 
-def test_builtin_operator_rejects_custom_latex():
-    with pytest.raises(ValueError, match="only be used"):
-        mod.prepare(html(operator="sum", **{"operator-latex": r"\star"}), data())
+def test_builtin_operator_accepts_custom_latex():
+    markup = html(operator="sum", **{"operator-latex": r"\star"})
+    config = mod._config(markup)
+
+    assert config.operator == "sum"
+    assert config.operator_latex == r"\star"
+    assert r"\(\displaystyle \star\)" in mod.render(markup, data())
 
 
 @pytest.mark.parametrize(

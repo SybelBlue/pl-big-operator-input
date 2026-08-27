@@ -23,7 +23,7 @@
       ]
     },
     "operator-latex": {
-      "description": "LaTeX that displays a custom operator. Supplying this without operator implies operator=custom; it is required for explicit custom operators and invalid for built-in operators.",
+      "description": "LaTeX used to display the operator. Supplying this without operator implies operator=custom; it is required for explicit custom operators and may override the display of built-in operators.",
       "type": "string"
     },
     "limits": {
