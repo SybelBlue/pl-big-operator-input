@@ -53,7 +53,7 @@ inconvenient.
 | Union, Intersection, DisjointUnion | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain      | bounds, domain           |
 | And, Or                            | $\bigwedge$, $\bigvee$            | domain      | bounds, domain           |
 | Min, Max                           | $\min$, $\max$                    | domain      | bounds, domain           |
-| Custom                             | ---                               | none        | bounds, domain, approach |
+| Custom                             | ---                               | inferred from a whole answer | bounds, domain, approach |
 
 Bounds forms collect a lower bound, an upper bound, and a body. Domain forms
 collect a domain and a body, while approach forms collect a target and a body.
@@ -61,14 +61,15 @@ The element displays and parses only the inputs required by the selected form.
 For a one-sided limit, the target is displayed with a `-` or `+`; the combined
 answer records the corresponding descriptive direction.
 
-Custom operators require explicit `limits="bounds"`, `limits="domain"`, or
-`limits="approach"` because there is no meaningful automatic form. They are
-ungraded when no correct answer is supplied. A custom operator with a correct answer must use
+Custom operators infer their limits form from a parseable whole `Custom(...)`
+answer. Without one, they require explicit `limits="bounds"`, `limits="domain"`,
+or `limits="approach"`. They are ungraded when no correct answer is supplied.
+A custom operator with a correct answer must use
 `grading-method="exact"` or `grading-method="component"`; symbolic equivalence
 is unavailable because arbitrary LaTeX does not identify a SymPy operation.
 For a whole correct answer, use the parseable syntax `Custom(body, limits)`,
 where `limits` is `(index, domain)`, `(index, lower, upper)`, or
-`(index, target, direction)` and matches the explicit limits form. Approach
+`(index, target, direction)` and determines the limits form. Approach
 directions use the same `"+"`, `"-"`, and `"+-"` values as `Limit`. Supplying
 `operator-latex` makes
 the separate `operator="custom"` attribute optional.
@@ -82,7 +83,6 @@ stored response remains self-describing:
   correct-answer="Custom(k**2, (k, {1, 2}))"
   grading-method="component"
   index-variable="k"
-  limits="domain"
   operator-latex="\mathbb{E}"
 ></pl-big-operator-input>
 ```
@@ -93,7 +93,6 @@ stored response remains self-describing:
   correct-answer="Custom(f(x), (x, 0, '+-'))"
   grading-method="component"
   index-variable="x"
-  limits="approach"
   operator-latex="\operatorname{eval}"
 ></pl-big-operator-input>
 ```
