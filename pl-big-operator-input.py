@@ -354,12 +354,16 @@ def _config(html: str, data: Any | None = None) -> Config:
         raise ValueError(
             'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
         )
-    operator = (
-        explicit_operator
-        or ("custom" if custom_latex is not None else None)
-        or inferred_operator
-    )
-    assert operator is not None
+    if (
+        operator := (
+            explicit_operator
+            or ("custom" if custom_latex is not None else None)
+            or inferred_operator
+        )
+    ) is None:
+        raise ValueError(
+            'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
+        )
     if operator not in {*OPS, "custom"}:
         raise ValueError(f'Unknown operator "{operator}".')
     if operator == "custom":
