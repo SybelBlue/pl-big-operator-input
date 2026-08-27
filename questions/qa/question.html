@@ -194,9 +194,9 @@
             <tr>
                 <td>
                     Custom direct sum<br>
-                    <small>ungraded</small>
+                    <small><code>grading-method="exact"</code></small>
                 </td>
-                <td>&mdash;</td>
+                <td>$\displaystyle \bigoplus_{j=1}^{4} j^2$</td>
                 <td>
                     <pl-big-operator-input
                         answers-name="custom-direct-sum"
@@ -204,6 +204,10 @@
                         operator-latex="\bigoplus"
                         limits="bounds"
                         index-variable="j"
+                        grading-method="exact"
+                        correct-answer-start="1"
+                        correct-answer-end="4"
+                        correct-answer-body="j^2"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
