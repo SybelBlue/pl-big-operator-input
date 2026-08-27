@@ -62,6 +62,15 @@ SYMPY_CONSTRUCTORS: dict[str, type[sympy.Basic]] = {
     "min": sympy.Min,
     "max": sympy.Max,
 }
+FUNCTION_BINDERS = {
+    "union": "Union",
+    "intersection": "Intersection",
+    "disjoint-union": "DisjointUnion",
+    "and": "And",
+    "or": "Or",
+    "min": "Min",
+    "max": "Max",
+}
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
 COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
@@ -351,6 +360,36 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
     return _canonical(config, {"lower": lower, "upper": upper, "body": value.function})
 
 
+def _function_binder(config: Config, source: str) -> dict[str, Any] | None:
+    function_name = FUNCTION_BINDERS.get(config.operator)
+    if function_name is None:
+        return None
+    function = sympy.Function(function_name)
+    try:
+        value = sympy.sympify(source, locals={function_name: function})  # type: ignore[call-overload]
+    except (sympy.SympifyError, TypeError, ValueError) as exc:
+        raise ValueError("The correct answer contains invalid SymPy data.") from exc
+    if value.func != function or len(value.args) != 2:
+        return None
+    body, binder = value.args
+    if not isinstance(binder, sympy.Tuple):
+        return None
+    expected_length = 3 if config.limits == "bounds" else 2
+    if len(binder) != expected_length:
+        raise ValueError(
+            f'Correct answer for limits="{config.limits}" requires a '
+            f"{expected_length}-item binder tuple."
+        )
+    index = sympy.Symbol(config.index)
+    if binder[0] != index:
+        raise ValueError("Correct answer index does not match index-variable.")
+    if config.limits == "bounds":
+        return _canonical(
+            config, {"lower": binder[1], "upper": binder[2], "body": body}
+        )
+    return _canonical(config, {"domain": binder[1], "body": body})
+
+
 def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
     prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
     raw = (
@@ -374,6 +413,10 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
         return _structured(config, raw)  # type: ignore
     if config.correct_components:
         return _component_values(config, cast(dict[Component, Any], raw))
+    if isinstance(raw, str):
+        converted = _function_binder(config, raw)
+        if converted is not None:
+            return converted
     value = _decode(raw)
     converted = _binder(config, value)
     if converted is not None:

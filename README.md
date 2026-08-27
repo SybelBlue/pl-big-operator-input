@@ -119,6 +119,19 @@ be listed in `variables`.
 
 Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as author conveniences and normalized during `prepare()`. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never accepted as substitutes for it.
 
+The variadic operators also accept an inert function-style author answer that
+preserves the binder, using `(index, domain)` or `(index, lower, upper)` as the
+second argument. For example:
+
+```html
+correct-answer="Union({k}, (k, {1, 2}))"
+correct-answer="Min(k**2, (k, {1, 2}))"
+correct-answer="Max(k**2, (k, 1, 4))"
+```
+
+These strings are normalized to the same canonical answer during `prepare()`;
+they are not treated as evaluated variadic SymPy expressions.
+
 ## Grading
 
 `exact` requires an identical canonical operator, form, direction, index, and exact SymPy components. `component` compares visible components independently. `equivalent` constructs binder-aware Sum, Product, Integral, or Limit objects where possible. Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly. Bounded forms of variadic operators have no faithful SymPy binder and are likewise reported as unsupported for equivalent grading; use `exact` or `component` for those forms.

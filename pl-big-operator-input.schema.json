@@ -76,7 +76,10 @@
       "default": 1,
       "type": "integer"
     },
-    "correct-answer": {},
+    "correct-answer": {
+      "type": "string",
+      "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max)\\s*\\(.+\\)\\s*$"
+    },
     "correct-answer-start": {
       "type": "string"
     },

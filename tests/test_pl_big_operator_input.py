@@ -160,6 +160,51 @@ def test_prepare_decodes_serialized_binders_without_interval_parsing(operator, c
 
 
 @pytest.mark.parametrize(
+    "operator,function,body",
+    [
+        ("union", "Union", "{k}"),
+        ("intersection", "Intersection", "{k}"),
+        ("disjoint-union", "DisjointUnion", "{k}"),
+        ("and", "And", "k"),
+        ("or", "Or", "k"),
+        ("min", "Min", "k**2"),
+        ("max", "Max", "k**2"),
+    ],
+)
+def test_prepare_normalizes_function_domain_binders(operator, function, body):
+    state = data()
+    markup = html(
+        operator=operator,
+        grading_method="exact",
+        **{"correct-answer": f"{function}({body}, (k, {{1, 2}}))"},
+    )
+
+    mod.prepare(markup, state)
+
+    answer = state["correct_answers"]["op"]
+    values = mod._values(mod._config(markup), answer)
+    assert answer["operator"] == operator
+    assert values["domain"] == sympy.FiniteSet(1, 2)
+    assert values["body"] == sympy.sympify(body)
+
+
+def test_prepare_normalizes_function_bounds_binder():
+    state = data()
+    markup = html(
+        operator="max",
+        limits="bounds",
+        grading_method="exact",
+        **{"correct-answer": "Max(k**2, (k, 1, 4))"},
+    )
+
+    mod.prepare(markup, state)
+
+    values = mod._values(mod._config(markup), state["correct_answers"]["op"])
+    k = sympy.Symbol("k")
+    assert values == {"lower": 1, "upper": 4, "body": k**2}
+
+
+@pytest.mark.parametrize(
     "direction,sympy_direction",
     [("two-sided", "+-"), ("from-left", "-"), ("from-right", "+")],
 )
