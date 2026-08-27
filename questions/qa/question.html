@@ -103,8 +103,7 @@
                         answers-name="min"
                         operator="min"
                         index-variable="x"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="x^2"
+                        correct-answer="Min(x**2, (x, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -122,8 +121,7 @@
                         answers-name="max"
                         operator="max"
                         index-variable="x"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="x^2"
+                        correct-answer="Max(x**2, (x, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -142,8 +140,7 @@
                         operator="union"
                         index-variable="k"
                         grading-method="exact"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="{k}"
+                        correct-answer="Union({k}, (k, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -162,8 +159,7 @@
                         operator="intersection"
                         index-variable="k"
                         grading-method="exact"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="{k}"
+                        correct-answer="Intersection({k}, (k, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -182,8 +178,7 @@
                         operator="and"
                         index-variable="k"
                         grading-method="exact"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="k"
+                        correct-answer="And(k, (k, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -202,8 +197,7 @@
                         operator="or"
                         index-variable="k"
                         grading-method="exact"
-                        correct-answer-domain="{1, 2}"
-                        correct-answer-body="k"
+                        correct-answer="Or(k, (k, {1, 2}))"
                         allow-blank="true"
                     ></pl-big-operator-input>
                 </td>
@@ -234,12 +228,12 @@
                         <code>grading-method="exact"</code>
                     </small>
                 </td>
-                <td>$\displaystyle \bigoplus_{j=1}^{4} j^2$</td>
+                <td>$\displaystyle { \Huge\bigstar{} }_{j=1}^{4} j^2$</td>
                 <td>
                     <pl-big-operator-input
                         answers-name="custom-direct-sum"
                         operator="custom"
-                        operator-latex="\bigoplus"
+                        operator-latex="{ \Huge\bigstar{} }"
                         limits="bounds"
                         index-variable="j"
                         grading-method="exact"
