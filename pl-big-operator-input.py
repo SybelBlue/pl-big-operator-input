@@ -71,6 +71,13 @@ FUNCTION_BINDERS = {
     "min": "Min",
     "max": "Max",
 }
+STRING_OPERATORS = {
+    "Sum": "sum",
+    "Product": "product",
+    "Integral": "integral",
+    "Limit": "limit",
+    **{name: operator for operator, name in FUNCTION_BINDERS.items()},
+}
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
 COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
@@ -113,7 +120,49 @@ class Config:
         return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
 
 
-def _config(html: str) -> Config:
+def _raw_correct_answer(
+    answer: str,
+    correct_attribute: str | None,
+    correct_components: dict[Component, str],
+    data: Any | None,
+) -> Any:
+    if correct_components:
+        return correct_components
+    if correct_attribute is not None:
+        return correct_attribute
+    if data is None:
+        return None
+    return data.get("correct_answers", {}).get(
+        answer, data.get("params", {}).get(f"_pl_big_operator_input_correct_{answer}")
+    )
+
+
+def _infer_operator(raw: Any) -> str | None:
+    if isinstance(raw, str):
+        match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
+        return STRING_OPERATORS.get(match.group(1)) if match else None
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("_type") == "operator_expression":
+        operator = raw.get("operator")
+        return operator if operator in OPS else None
+    if raw.get("_type") == "sympy":
+        try:
+            value = _decode(raw)
+        except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
+            return None
+        for operator, expected in {
+            "sum": sympy.Sum,
+            "product": sympy.Product,
+            "integral": sympy.Integral,
+            "limit": sympy.Limit,
+        }.items():
+            if isinstance(value, expected):
+                return operator
+    return None
+
+
+def _config(html: str, data: Any | None = None) -> Config:
     element = lxml.html.fragment_fromstring(html)
     required = {}
     for name in ("answers-name", "index-variable"):
@@ -121,7 +170,26 @@ def _config(html: str) -> Config:
         if value is None or not value.strip():
             raise ValueError(f'Required attribute "{name}" missing')
         required[name] = value.strip()
-    operator = pl.get_string_attrib(element, "operator", "sum") or "sum"
+    explicit_operator = pl.get_string_attrib(element, "operator", None)
+    correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
+    supplied_components: dict[Component, str] = {
+        component: value
+        for component, attribute in CORRECT_COMPONENT_ATTRIBUTES.items()
+        if (value := pl.get_string_attrib(element, attribute, None)) is not None
+    }
+    raw_correct = _raw_correct_answer(
+        required["answers-name"], correct_attribute, supplied_components, data
+    )
+    inferred_operator = None
+    if explicit_operator is None:
+        if not supplied_components and isinstance(raw_correct, (str, dict)):
+            inferred_operator = _infer_operator(raw_correct)
+        if inferred_operator is None:
+            raise ValueError(
+                'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
+            )
+    operator = explicit_operator or inferred_operator
+    assert operator is not None
     if operator not in {*OPS, "custom"}:
         raise ValueError(f'Unknown operator "{operator}".')
     custom_latex = pl.get_string_attrib(element, "operator-latex", None)
@@ -169,11 +237,6 @@ def _config(html: str) -> Config:
         raise ValueError(f'Unknown limit-direction "{direction}".')
     variables = pl.get_string_attrib(element, "variables", "") or ""
     components = COMPONENT_MAP[cast(LimitFormat, limits)]
-    supplied_components = {
-        component: value
-        for component, attribute in CORRECT_COMPONENT_ATTRIBUTES.items()
-        if (value := pl.get_string_attrib(element, attribute, None)) is not None
-    }
     irrelevant = set(supplied_components) - set(components)
     if irrelevant:
         attributes = ", ".join(
@@ -192,7 +255,6 @@ def _config(html: str) -> Config:
         raise ValueError(
             f"Component correct answers must supply every visible field; missing {missing}."
         )
-    correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
     if correct_attribute is not None and supplied_components:
         raise ValueError(
             'Use either "correct-answer" or component correct-answer attributes, not both.'
@@ -391,17 +453,11 @@ def _function_binder(config: Config, source: str) -> dict[str, Any] | None:
 
 
 def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
-    prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
-    raw = (
-        dict(config.correct_components)
-        if config.correct_components
-        else (
-            config.correct_attribute
-            if config.correct_attribute is not None
-            else data.get("correct_answers", {}).get(
-                config.answer, data.get("params", {}).get(prepared_key)
-            )
-        )
+    raw = _raw_correct_answer(
+        config.answer,
+        config.correct_attribute,
+        dict(config.correct_components),
+        data,
     )
     if (
         config.operator == "custom"
@@ -431,7 +487,7 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
 
 
 def prepare(element_html: str, data: pl.QuestionData) -> None:
-    config = _config(element_html)
+    config = _config(element_html, data)
     correct = _correct(config, data)
     if correct is not None:
         data.setdefault("correct_answers", {})[config.answer] = correct
@@ -596,7 +652,7 @@ def _score_badge(score: float) -> dict[str, Any]:
 
 
 def render(element_html: str, data: pl.QuestionData) -> str:
-    config = _config(element_html)
+    config = _config(element_html, data)
     panel = data.get("panel", "question")
     if panel == "question":
         return _question(config, data)
@@ -697,7 +753,7 @@ def _parse_values(
 
 
 def parse(element_html: str, data: dict[str, Any]) -> None:
-    config = _config(element_html)
+    config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
     if _blank(config, data.get("raw_submitted_answers")):
         submitted[config.answer] = "" if config.allow_blank else None
@@ -764,7 +820,7 @@ def _equivalent(
 
 
 def grade(element_html: str, data: pl.QuestionData) -> None:
-    config = _config(element_html)
+    config = _config(element_html, data)
     correct_json = _correct(config, data)
     if correct_json is None:
         return

@@ -6,8 +6,7 @@
       "type": "string"
     },
     "operator": {
-      "description": "Big operator to display and use when constructing the combined answer.",
-      "default": "sum",
+      "description": "Big operator to display and use when constructing the combined answer. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "enum": [
         "sum",
         "product",
@@ -121,6 +120,18 @@
   ],
   "oneOf": [
     {
+      "not": {
+        "anyOf": [
+          {
+            "required": ["operator"]
+          },
+          {
+            "required": ["operator-latex"]
+          }
+        ]
+      }
+    },
+    {
       "properties": {
         "operator": {
           "const": "custom"
@@ -159,6 +170,7 @@
           ]
         }
       },
+      "required": ["operator"],
       "not": {
         "required": ["operator-latex"]
       }

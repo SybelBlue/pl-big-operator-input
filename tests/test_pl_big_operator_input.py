@@ -55,6 +55,126 @@ def test_auto_limits(operator, limits):
     assert mod._config(html(operator=operator)).limits == limits
 
 
+@pytest.mark.parametrize(
+    "operator,correct,limits",
+    [
+        ("sum", "Sum(k**2, (k, 1, 4))", "bounds"),
+        ("product", "Product(k, (k, 1, 4))", "bounds"),
+        ("integral", "Integral(k, (k, 0, 1))", "bounds"),
+        ("limit", "Limit(sin(k) / k, k, 0, dir='+-')", "approach"),
+        ("union", "Union({k}, (k, {1, 2}))", "domain"),
+        ("intersection", "Intersection({k}, (k, {1, 2}))", "domain"),
+        ("disjoint-union", "DisjointUnion({k}, (k, {1, 2}))", "domain"),
+        ("and", "And(k, (k, {1, 2}))", "domain"),
+        ("or", "Or(k, (k, {1, 2}))", "domain"),
+        ("min", "Min(k**2, (k, {1, 2}))", "domain"),
+        ("max", "Max(k**2, (k, {1, 2}))", "domain"),
+    ],
+)
+def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
+    markup = html(**{"correct-answer": correct})
+    state = data()
+    mod.prepare(markup, state)
+    assert state["correct_answers"]["op"]["operator"] == operator
+    assert state["correct_answers"]["op"]["limits"] == limits
+    assert mod._config(markup, state).operator == operator
+    assert mod.OPS[operator][0] in mod.render(markup, state)
+
+
+@pytest.mark.parametrize(
+    "operator,correct",
+    [
+        ("sum", sympy.Sum(sympy.Symbol("k") ** 2, (sympy.Symbol("k"), 1, 4))),
+        ("product", sympy.Product(sympy.Symbol("k"), (sympy.Symbol("k"), 1, 4))),
+        ("integral", sympy.Integral(sympy.Symbol("k"), (sympy.Symbol("k"), 0, 1))),
+        (
+            "limit",
+            sympy.Limit(
+                sympy.sin(sympy.Symbol("k")) / sympy.Symbol("k"),  # type: ignore
+                sympy.Symbol("k"),
+                0,
+                dir="+-",
+            ),
+        ),
+    ],
+)
+def test_infers_operator_from_sympy_json(operator, correct):
+    state = data(mod.psu.sympy_to_json(correct))
+    mod.prepare(html(), state)
+    assert state["correct_answers"]["op"]["operator"] == operator
+
+
+def test_infers_operator_from_canonical_dictionary():
+    state = data(canonical())
+    mod.prepare(html(), state)
+    assert state["correct_answers"]["op"]["operator"] == "union"
+
+
+def test_omitted_operator_requires_inferable_whole_answer():
+    with pytest.raises(ValueError, match='"operator" attribute is required'):
+        mod._config(html())
+    markup = html(
+        **{
+            "correct-answer-start": "1",
+            "correct-answer-end": "4",
+            "correct-answer-body": "k",
+        },
+    )
+    with pytest.raises(ValueError, match='"operator" attribute is required'):
+        mod._config(markup)
+
+
+@pytest.mark.parametrize(
+    "correct",
+    [
+        "NotAnOperator(k, (k, 1, 4))",
+        {"_type": "operator_expression", "_version": 1},
+        {"_type": "operator_expression", "operator": "custom"},
+        {"_type": "sympy", "_value": "k + 1"},
+    ],
+)
+def test_uninferable_string_or_dictionary_requires_operator(correct):
+    with pytest.raises(ValueError, match='"operator" attribute is required'):
+        mod.prepare(html(), data(correct))
+
+
+def test_explicit_operator_remains_authoritative():
+    with pytest.raises(TypeError, match="matching binder-aware"):
+        mod.prepare(html(operator="sum"), data("Product(k, (k, 1, 4))"))
+
+
+def test_raw_sympy_object_does_not_trigger_inference():
+    correct = sympy.Product(sympy.Symbol("k"), (sympy.Symbol("k"), 1, 4))
+    with pytest.raises(ValueError, match='"operator" attribute is required'):
+        mod.prepare(html(), data(correct))
+    state = data(correct)
+    mod.prepare(html(operator="product"), state)
+    assert state["correct_answers"]["op"]["operator"] == "product"
+
+
+def test_inferred_operator_validates_explicit_limits():
+    with pytest.raises(ValueError, match='does not support limits="bounds"'):
+        mod.prepare(
+            html(
+                limits="bounds",
+                **{"correct-answer": "Limit(k, k, 0)"},
+            ),
+            data(),
+        )
+
+
+def test_inferred_limit_validates_and_preserves_direction():
+    markup = html(
+        **{
+            "correct-answer": "Limit(sin(k) / k, k, 0, dir='+')",
+            "limit-direction": "from-right",
+        },
+    )
+    state = data()
+    mod.prepare(markup, state)
+    assert state["correct_answers"]["op"]["direction"] == "from-right"
+
+
 @pytest.mark.parametrize("limits", ["bounds", "domain"])
 def test_custom_operator_requires_explicit_supported_limits(limits):
     config = mod._config(
@@ -78,7 +198,7 @@ def test_custom_operator_requires_nonempty_latex():
 
 def test_builtin_operator_rejects_custom_latex():
     with pytest.raises(ValueError, match="only be used"):
-        mod.prepare(html(**{"operator-latex": r"\star"}), data())
+        mod.prepare(html(operator="sum", **{"operator-latex": r"\star"}), data())
 
 
 @pytest.mark.parametrize(
@@ -221,7 +341,7 @@ def test_limit_directions(direction, sympy_direction):
     if direction == "two-sided":
         assert "pl-big-operator-input__suffix" not in rendered
     else:
-        assert f'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
+        assert 'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
         assert ("−" if direction == "from-left" else "+") in rendered
 
 
@@ -251,6 +371,7 @@ def test_domain_structured_answer_and_rendering():
 def test_prepare_parses_basic_component_correct_answer_strings():
     state = data()
     markup = html(
+        operator="sum",
         variables="n",
         **{
             "correct-answer-start": "1",
@@ -308,7 +429,10 @@ def test_prepare_accepts_symbolic_integral_domain():
 def test_prepare_component_correct_answer_requires_every_visible_attribute():
     with pytest.raises(ValueError, match="missing correct-answer-end"):
         mod.prepare(
-            html(**{"correct-answer-start": "1", "correct-answer-body": "k"}),
+            html(
+                operator="sum",
+                **{"correct-answer-start": "1", "correct-answer-body": "k"},
+            ),
             data(),
         )
 
@@ -326,19 +450,20 @@ def test_prepare_component_correct_answer_enforces_set_fields():
 
 def test_prepare_rejects_irrelevant_component_correct_answer_attribute():
     with pytest.raises(ValueError, match="cannot be used"):
-        mod.prepare(html(**{"correct-answer-domain": "{1}"}), data())
+        mod.prepare(html(operator="sum", **{"correct-answer-domain": "{1}"}), data())
 
 
 def test_prepare_rejects_combined_whole_and_component_correct_answers():
     with pytest.raises(ValueError, match="either"):
         mod.prepare(
             html(
+                operator="sum",
                 **{
                     "correct-answer": "Sum(k, (k, 1, 2))",
                     "correct-answer-start": "1",
                     "correct-answer-end": "2",
                     "correct-answer-body": "k",
-                }
+                },
             ),
             data(),
         )
@@ -456,7 +581,7 @@ def test_bare_variables_are_accepted_as_symbolic_sets():
 
 
 def test_allow_complex_is_delegated_to_symbolic_inputs():
-    markup = html(variables="j", **{"allow-complex": "false"})
+    markup = html(operator="sum", variables="j", **{"allow-complex": "false"})
     state = data(raw={"op-start": "1", "op-end": "4", "op-body": "j^2"})
 
     mod.parse(markup, state)
@@ -502,7 +627,7 @@ def test_partially_blank_submission_has_a_descriptive_field_error():
 
 def test_wholly_blank_required_submission_marks_every_field_invalid():
     state = data(raw={"op-start": "", "op-end": "", "op-body": ""})
-    markup = html()
+    markup = html(operator="sum")
 
     mod.parse(markup, state)
 
@@ -537,7 +662,7 @@ def test_initial_latex_is_stored_outside_math_fields():
 
 
 def test_question_fields_are_rendered_by_vendored_symbolic_input():
-    rendered = mod.render(html(), data())
+    rendered = mod.render(html(operator="sum"), data())
 
     assert rendered.count("pl-symbolic-input") >= 3
     assert "window.PLSymbolicInput" in rendered
@@ -549,7 +674,7 @@ def test_question_fields_are_rendered_by_vendored_symbolic_input():
 
 
 def test_body_help_text_can_be_disabled():
-    rendered = mod.render(html(**{"show-help-text": "false"}), data())
+    rendered = mod.render(html(operator="sum", **{"show-help-text": "false"}), data())
 
     assert 'title="Symbolic"' not in rendered
 
@@ -598,7 +723,7 @@ def test_parse_does_not_add_render_or_grade_phase_data_keys():
         "gradable": True,
     }
 
-    mod.parse(html(), state)
+    mod.parse(html(operator="sum"), state)
 
     assert state["submitted_answers"]["op"]["_type"] == "operator_expression"
     assert "partial_scores" not in state
@@ -609,7 +734,10 @@ def test_component_grading_weights_body():
     k = sympy.Symbol("k")
     correct = sympy.Sum(k**2, (k, 1, 4))
     state = data(correct, {"op-start": "1", "op-end": "5", "op-body": "k^2"})
-    markup = html(**{"grading-method": "component", "body-relative-weight": "2"})
+    markup = html(
+        operator="sum",
+        **{"grading-method": "component", "body-relative-weight": "2"},
+    )
     mod.prepare(markup, state)
     mod.parse(markup, state)
     mod.grade(markup, state)
@@ -618,7 +746,7 @@ def test_component_grading_weights_body():
 
 def test_component_grading_shows_icon_only_badges_on_symbolic_inputs():
     k = sympy.Symbol("k")
-    markup = html(**{"grading-method": "component"})
+    markup = html(operator="sum", **{"grading-method": "component"})
     state = data(
         sympy.Sum(k**2, (k, 1, 4)),
         {"op-start": "1", "op-end": "5", "op-body": "k^2"},
@@ -641,7 +769,7 @@ def test_exact_and_equivalent_grading(grading):
     state = data(
         sympy.Sum(k**2, (k, 1, 4)), {"op-start": "1", "op-end": "4", "op-body": "k^2"}
     )
-    markup = html(**{"grading-method": grading})
+    markup = html(operator="sum", **{"grading-method": grading})
     mod.prepare(markup, state)
     mod.parse(markup, state)
     mod.grade(markup, state)
@@ -650,10 +778,10 @@ def test_exact_and_equivalent_grading(grading):
 
 def test_allow_blank_and_independent_parse_errors():
     blank = data(raw={"op-start": "", "op-end": "", "op-body": ""})
-    mod.parse(html(**{"allow-blank": "true"}), blank)
+    mod.parse(html(operator="sum", **{"allow-blank": "true"}), blank)
     assert blank["submitted_answers"]["op"] == ""
     broken = data(raw={"op-start": "1", "op-end": "@", "op-body": "k"})
-    mod.parse(html(), broken)
+    mod.parse(html(operator="sum"), broken)
     assert (
         "op-start" in broken["submitted_answers"]
         and "op-body" in broken["submitted_answers"]
@@ -667,7 +795,7 @@ def test_allow_blank_and_independent_parse_errors():
 def test_allow_blank_submission_is_gradable_as_incorrect():
     k = sympy.Symbol("k")
     state = data(sympy.Sum(k**2, (k, 1, 4)))
-    markup = html(**{"allow-blank": "true"})
+    markup = html(operator="sum", **{"allow-blank": "true"})
 
     mod.prepare(markup, state)
     mod.parse(markup, state)
@@ -680,7 +808,7 @@ def test_allow_blank_submission_is_gradable_as_incorrect():
 
 def test_ungraded_submission_is_parsed_but_not_scored():
     state = data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"})
-    markup = html()
+    markup = html(operator="sum")
 
     mod.prepare(markup, state)
     mod.parse(markup, state)
@@ -692,7 +820,7 @@ def test_ungraded_submission_is_parsed_but_not_scored():
 
 
 def test_ungraded_submission_panel_shows_response_without_score_badge():
-    markup = html()
+    markup = html(operator="sum")
     state = data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"})
     mod.parse(markup, state)
     state["panel"] = "submission"
@@ -704,13 +832,13 @@ def test_ungraded_submission_panel_shows_response_without_score_badge():
 
 
 def test_ungraded_answer_panel_is_empty():
-    assert mod.render(html(), data(panel="answer")) == ""
+    assert mod.render(html(operator="sum"), data(panel="answer")) == ""
 
 
 def test_ungraded_blank_submission_still_requires_allow_blank():
     state = data(raw={"op-start": "", "op-end": "", "op-body": ""})
 
-    mod.parse(html(), state)
+    mod.parse(html(operator="sum"), state)
 
     assert state["submitted_answers"]["op"] is None
     assert set(state["format_errors"]) == {"op-start", "op-end", "op-body"}
@@ -864,7 +992,7 @@ def test_question_view_shows_score_badge(score, badge_class, label):
     state = data()
     state["partial_scores"] = {"op": {"score": score}}
 
-    rendered = mod.render(html(), state)
+    rendered = mod.render(html(operator="sum"), state)
 
     assert rendered.count("badge") == 1
     assert badge_class in rendered
