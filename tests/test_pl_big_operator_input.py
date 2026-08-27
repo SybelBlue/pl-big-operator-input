@@ -157,9 +157,7 @@ def test_prepare_does_not_populate_params_with_correct_answer():
 def test_prepare_does_not_use_correct_answer_backup_from_params():
     k = sympy.Symbol("k")
     state = data()
-    state["params"]["_pl_big_operator_input_correct_op"] = sympy.Sum(
-        k**2, (k, 1, 4)
-    )
+    state["params"]["_pl_big_operator_input_correct_op"] = sympy.Sum(k**2, (k, 1, 4))
 
     mod.prepare(html(), state)
 
@@ -242,7 +240,7 @@ def test_limit_directions(direction, sympy_direction):
     if direction == "two-sided":
         assert "pl-big-operator-input__suffix" not in rendered
     else:
-        assert f'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
+        assert 'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
         assert ("−" if direction == "from-left" else "+") in rendered
 
 
@@ -668,9 +666,9 @@ def test_exact_and_equivalent_grading(grading):
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
-def test_allow_blank_and_independent_parse_errors():
+def test_allowed_blank_and_independent_parse_errors():
     blank = data(raw={"op-start": "", "op-end": "", "op-body": ""})
-    mod.parse(html(**{"allow-blank": "true"}), blank)
+    mod.parse(html(**{"allowed-blank": "all"}), blank)
     assert blank["submitted_answers"]["op"] == ""
     broken = data(raw={"op-start": "1", "op-end": "@", "op-body": "k"})
     mod.parse(html(), broken)
@@ -684,10 +682,10 @@ def test_allow_blank_and_independent_parse_errors():
     )
 
 
-def test_allow_blank_submission_is_gradable_as_incorrect():
+def test_allowed_blank_submission_is_gradable_as_incorrect():
     k = sympy.Symbol("k")
     state = data(sympy.Sum(k**2, (k, 1, 4)))
-    markup = html(**{"allow-blank": "true"})
+    markup = html(**{"allowed-blank": "all"})
 
     mod.prepare(markup, state)
     mod.parse(markup, state)
@@ -727,13 +725,62 @@ def test_ungraded_answer_panel_is_empty():
     assert mod.render(html(), data(panel="answer")) == ""
 
 
-def test_ungraded_blank_submission_still_requires_allow_blank():
+def test_ungraded_blank_submission_still_requires_allowed_blank():
     state = data(raw={"op-start": "", "op-end": "", "op-body": ""})
 
     mod.parse(html(), state)
 
     assert state["submitted_answers"]["op"] is None
     assert set(state["format_errors"]) == {"op-start", "op-end", "op-body"}
+
+
+@pytest.mark.parametrize(
+    ("allowed_blank", "raw", "blank_field"),
+    [
+        ("limits", {"op-start": "1", "op-end": "", "op-body": "k^2"}, "op-end"),
+        ("limits", {"op-start": "", "op-end": "4", "op-body": "k^2"}, "op-start"),
+        ("limits", {"op-start": "", "op-end": "", "op-body": "k^2"}, "op-start"),
+        ("body", {"op-start": "1", "op-end": "4", "op-body": ""}, "op-body"),
+        ("all", {"op-start": "", "op-end": "4", "op-body": ""}, "op-body"),
+        ("all", {"op-start": "4", "op-end": "4", "op-body": ""}, "op-body"),
+        ("all", {"op-start": "4", "op-end": "", "op-body": ""}, "op-body"),
+        ("all", {"op-start": "", "op-end": "", "op-body": ""}, "op-body"),
+    ],
+)
+def test_allowed_blank_modes_accept_the_selected_fields(
+    allowed_blank, raw, blank_field
+):
+    state = data(raw=raw)
+
+    mod.parse(html(**{"allowed-blank": allowed_blank}), state)
+
+    assert state["submitted_answers"]["op"] == ""
+    assert state["submitted_answers"][blank_field] == ""
+    assert "format_errors" not in state
+
+
+@pytest.mark.parametrize(
+    ("allowed_blank", "raw", "required_field"),
+    [
+        ("none", {"op-start": "", "op-end": "4", "op-body": "k^2"}, "op-start"),
+        ("limits", {"op-start": "1", "op-end": "4", "op-body": ""}, "op-body"),
+        ("body", {"op-start": "", "op-end": "4", "op-body": "k^2"}, "op-start"),
+    ],
+)
+def test_allowed_blank_modes_reject_unselected_fields(
+    allowed_blank, raw, required_field
+):
+    state = data(raw=raw)
+
+    mod.parse(html(**{"allowed-blank": allowed_blank}), state)
+
+    assert state["submitted_answers"]["op"] is None
+    assert state["format_errors"][required_field] == "No submitted answer."
+
+
+def test_invalid_allowed_blank_value_is_rejected():
+    with pytest.raises(ValueError, match='Attribute "allowed-blank"'):
+        mod._config(html(**{"allowed-blank": "true"}))
 
 
 @pytest.mark.parametrize(
