@@ -563,9 +563,7 @@ def test_body_right_edge_is_rounded_only_when_it_has_no_trailing_control():
 
     assert ".pl-big-operator-input__body math-field {" in css
     assert "border-radius: var(--bs-border-radius) !important" not in css
-    assert (
-        ".pl-big-operator-input__body .input-group > math-field:last-child" in css
-    )
+    assert ".pl-big-operator-input__body .input-group > math-field:last-child" in css
     assert "border-top-right-radius: var(--bs-border-radius) !important" in css
     assert "border-bottom-right-radius: var(--bs-border-radius) !important" in css
 
@@ -754,6 +752,28 @@ def test_custom_operator_exact_grading():
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
+def test_custom_operator_component_grading():
+    markup = html(
+        operator="custom",
+        limits="bounds",
+        **{
+            "operator-latex": r"\mathbb{E}",
+            "grading-method": "component",
+            "body-relative-weight": "2",
+            "correct-answer-start": "1",
+            "correct-answer-end": "4",
+            "correct-answer-body": "k^2",
+        },
+    )
+    state = data(raw={"op-start": "1", "op-end": "5", "op-body": "k^2"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"] == {"score": pytest.approx(0.75), "weight": 1}
+
+
 def test_custom_operator_correct_answer_panel_renders_complete_notation():
     markup = html(
         operator="custom",
@@ -776,14 +796,15 @@ def test_custom_operator_correct_answer_panel_renders_complete_notation():
     assert "badge" not in rendered
 
 
-def test_custom_operator_correct_answer_requires_exact_grading():
-    with pytest.raises(ValueError, match='grading-method="exact"'):
+def test_custom_operator_correct_answer_rejects_equivalent_grading():
+    with pytest.raises(ValueError, match='"exact" or "component"'):
         mod.prepare(
             html(
                 operator="custom",
                 limits="bounds",
                 **{
                     "operator-latex": r"\star",
+                    "grading-method": "equivalent",
                     "correct-answer-start": "1",
                     "correct-answer-end": "4",
                     "correct-answer-body": "k^2",
@@ -793,8 +814,8 @@ def test_custom_operator_correct_answer_requires_exact_grading():
         )
 
 
-def test_custom_operator_correct_answer_data_requires_exact_grading():
-    with pytest.raises(ValueError, match='grading-method="exact"'):
+def test_custom_operator_correct_answer_data_rejects_equivalent_grading():
+    with pytest.raises(ValueError, match='"exact" or "component"'):
         mod.prepare(
             html(operator="custom", limits="bounds", **{"operator-latex": r"\star"}),
             data(sympy.Integer(1)),

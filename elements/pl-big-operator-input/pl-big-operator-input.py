@@ -200,10 +200,10 @@ def _config(html: str) -> Config:
     if (
         operator == "custom"
         and (correct_attribute is not None or supplied_components)
-        and grading != "exact"
+        and grading not in {"exact", "component"}
     ):
         raise ValueError(
-            'Custom operators with a correct answer require grading-method="exact".'
+            'Custom operators with a correct answer require grading-method="exact" or "component".'
         )
     return Config(
         required["answers-name"],
@@ -403,9 +403,13 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
             )
         )
     )
-    if config.operator == "custom" and raw is not None and config.grading != "exact":
+    if (
+        config.operator == "custom"
+        and raw is not None
+        and config.grading not in {"exact", "component"}
+    ):
         raise ValueError(
-            'Custom operators with a correct answer require grading-method="exact".'
+            'Custom operators with a correct answer require grading-method="exact" or "component".'
         )
     if raw is None:
         return None
