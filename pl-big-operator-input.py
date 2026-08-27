@@ -374,11 +374,9 @@ def _config(html: str, data: Any | None = None) -> Config:
             )
         operator_latex = custom_latex.strip()
     else:
-        if custom_latex is not None:
-            raise ValueError(
-                'Attribute "operator-latex" can only be used when operator="custom".'
-            )
-        operator_latex = OPS[operator][0]
+        operator_latex = (
+            custom_latex.strip() if custom_latex is not None else OPS[operator][0]
+        )
     limits = pl.get_string_attrib(element, "limits", "auto") or "auto"
     if limits == "auto":
         if inferred_operator == operator and inferred_limits:
