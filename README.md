@@ -35,7 +35,7 @@ inconvenient.
 | `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                        |
 | `variables`                                                                                                           |           | empty                    | Comma-separated extra allowed symbols, e.g. `"Gamma,theta,N"`.                                                                                   |
 | `operator-latex`                                                                                                      |           | ---                      | Custom operator LaTeX. When supplied without `operator`, it requires `operator="custom"`.                                                        |
-| `allow-blank`                                                                                                         |           | `false`                  | Permit a wholly blank response.                                                                                                                  |
+| `allowed-blank`                                                                                                       |           | `none`                   | Permit blank `limits`, the `body`, `all` fields, or `none`.                                                                                      |
 | `show-help-text`                                                                                                      |           | `true`                   | Show symbolic-entry help beside the body input. Set to `false` to hide it.                                                                       |
 | `grading-method`                                                                                                      |           | `equivalent`             | `exact`, `component`, or `equivalent`.                                                                                                           |
 | `body-relative-weight`                                                                                                |           | `3`                      | Body weight in component grading; every limit component has weight 1.                                                                            |
@@ -261,4 +261,4 @@ If no correct answer is supplied through an attribute or
 the combined canonical response, but it does not create a partial score.
 Submission panels display the response without a score badge, and answer panels
 render nothing. Blank-response validation remains controlled separately by
-`allow-blank`.
+`allowed-blank`.
