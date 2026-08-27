@@ -26,6 +26,7 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 | `body-relative-weight` | `3` | Body weight in component grading; every limit component has weight 1. |
 | `weight` | `1` | PrairieLearn score weight. |
 | `correct-answer` | unset | Optional string form of a losslessly convertible binder-aware SymPy answer. |
+| `correct-answer-start`, `correct-answer-end`, `correct-answer-domain`, `correct-answer-target`, `correct-answer-body` | unset | Basic string answers for the visible component fields. Supply every component for the resolved limits form. |
 
 ## Operators and limits
 
@@ -41,7 +42,7 @@ data["correct_answers"]["total"] = sympy.Sum(k**2, (k, 1, n))
 
 Bounds use `<name>-start`, `<name>-end`, and `<name>-body`. Domain forms use `<name>-domain` and `<name>-body`. Approach forms use `<name>-target` and `<name>-body`. Only fields in the selected form are created or parsed. A one-sided limit adds `-` or `+` to the target display; the public combined answer retains the descriptive direction value.
 
-For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Domain integrals require a canonical structured correct answer. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
+For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
 
 ## Canonical answer
 
@@ -62,7 +63,31 @@ Every prepared or parsed combined answer is a flat version 1 dictionary. Mathema
 
 Domain answers replace `lower` and `upper` with `domain`. Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
 
-Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as author conveniences and normalized during `prepare()`. Domain forms require the dictionary. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never accepted as substitutes for it.
+Authors may instead provide the visible components as attributes. Each value is
+accepted by the same basic parser used for student input:
+
+```html
+<pl-big-operator-input
+  answers-name="total"
+  operator="sum"
+  index-variable="k"
+  variables="n"
+  correct-answer-start="1"
+  correct-answer-end="n"
+  correct-answer-body="k^2"
+></pl-big-operator-input>
+```
+
+The required attributes depend on the resolved limits form: bounds use `start`,
+`end`, and `body`; domain forms use `domain` and `body`; approach forms use
+`target` and `body`. Supplying an irrelevant component, omitting a component, or
+combining these attributes with `correct-answer` is an error. The element
+supplies the operator, limits form, index, and limit direction and normalizes
+the values to the canonical representation during `prepare()`. The index
+variable is automatically available when parsing the body; other symbols must
+be listed in `variables`.
+
+Bounded `sympy.Sum`, `sympy.Product`, and `sympy.Integral`, plus `sympy.Limit`, are accepted as author conveniences and normalized during `prepare()`. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`, and `Max` lose the indexed binder and therefore are never accepted as substitutes for it.
 
 ## Grading
 

@@ -64,7 +64,22 @@
       "default": 1,
       "type": "integer"
     },
-    "correct-answer": {}
+    "correct-answer": {},
+    "correct-answer-start": {
+      "type": "string"
+    },
+    "correct-answer-end": {
+      "type": "string"
+    },
+    "correct-answer-domain": {
+      "type": "string"
+    },
+    "correct-answer-target": {
+      "type": "string"
+    },
+    "correct-answer-body": {
+      "type": "string"
+    }
   },
   "required": [
     "answers-name",

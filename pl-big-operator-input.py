@@ -59,6 +59,13 @@ COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
     "domain": ("domain", "body"),
     "approach": ("target", "body"),
 }
+CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
+    "lower": "correct-answer-start",
+    "upper": "correct-answer-end",
+    "domain": "correct-answer-domain",
+    "target": "correct-answer-target",
+    "body": "correct-answer-body",
+}
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,7 @@ class Config:
     body_weight: int
     weight: int
     correct_attribute: str | None
+    correct_components: tuple[tuple[Component, str], ...]
 
     @property
     def components(self):
@@ -117,6 +125,35 @@ def _config(html: str) -> Config:
     if direction not in DIRECTIONS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
     variables = pl.get_string_attrib(element, "variables", "") or ""
+    components = COMPONENT_MAP[cast(LimitFormat, limits)]
+    supplied_components = {
+        component: value
+        for component, attribute in CORRECT_COMPONENT_ATTRIBUTES.items()
+        if (value := pl.get_string_attrib(element, attribute, None)) is not None
+    }
+    irrelevant = set(supplied_components) - set(components)
+    if irrelevant:
+        attributes = ", ".join(
+            CORRECT_COMPONENT_ATTRIBUTES[component]  # type: ignore
+            for component in irrelevant
+        )
+        raise ValueError(
+            f'Correct-answer attribute(s) {attributes} cannot be used with limits="{limits}".'
+        )
+    if supplied_components and set(supplied_components) != set(components):
+        missing = ", ".join(
+            CORRECT_COMPONENT_ATTRIBUTES[component]
+            for component in components
+            if component not in supplied_components
+        )
+        raise ValueError(
+            f"Component correct answers must supply every visible field; missing {missing}."
+        )
+    correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
+    if correct_attribute is not None and supplied_components:
+        raise ValueError(
+            'Use either "correct-answer" or component correct-answer attributes, not both.'
+        )
     return Config(
         required["answers-name"],
         operator,
@@ -128,7 +165,10 @@ def _config(html: str) -> Config:
         grading,
         body_weight,
         int(pl.get_integer_attrib(element, "weight", 1) or 1),
-        pl.get_string_attrib(element, "correct-answer", None),
+        correct_attribute,
+        tuple((component, supplied_components[component]) for component in components)
+        if supplied_components
+        else (),
     )
 
 
@@ -205,6 +245,31 @@ def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
     return _canonical(config, cast(dict[str, sympy.Basic], values))
 
 
+def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, Any]:
+    values: dict[str, sympy.Basic] = {}
+    for component in config.components:
+        raw = value[component]
+        variables = (
+            tuple(dict.fromkeys((*config.variables, config.index)))
+            if component == "body"
+            else config.variables
+        )
+        try:
+            parsed = _parse(raw, variables) if isinstance(raw, str) else _decode(raw)
+        except Exception as exc:
+            raise ValueError(
+                f'Parsing correct answer component "{component}" failed.'
+            ) from exc
+        if not isinstance(parsed, sympy.Basic):
+            raise TypeError(
+                f'Correct answer component "{component}" must be a SymPy value or parseable string.'
+            )
+        if _requires_set(config, component) and not isinstance(parsed, sympy.Set):
+            raise ValueError(f'Correct answer component "{component}" must be a set.')
+        values[component] = parsed
+    return _canonical(config, values)
+
+
 def _binder(config: Config, value: Any) -> dict[str, Any] | None:
     expected = {
         "sum": sympy.Sum,
@@ -236,16 +301,22 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
 def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
     prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
     raw = (
-        config.correct_attribute
-        if config.correct_attribute is not None
-        else data.get("correct_answers", {}).get(
-            config.answer, data.get("params", {}).get(prepared_key)
+        dict(config.correct_components)
+        if config.correct_components
+        else (
+            config.correct_attribute
+            if config.correct_attribute is not None
+            else data.get("correct_answers", {}).get(
+                config.answer, data.get("params", {}).get(prepared_key)
+            )
         )
     )
     if raw is None:
         return None
-    if isinstance(raw, dict) and raw.get("_type") == "operator_expression":
-        return _structured(config, raw)
+    if isinstance(raw, dict) and raw.get("_type") == "operator_expression":  # type: ignore
+        return _structured(config, raw)  # type: ignore
+    if config.correct_components:
+        return _component_values(config, cast(dict[Component, Any], raw))
     value = _decode(raw)
     converted = _binder(config, value)
     if converted is not None:
