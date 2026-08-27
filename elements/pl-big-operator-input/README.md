@@ -30,10 +30,11 @@ inconvenient.
 | `answers-name`                                                                                                        |           | required                 | Combined answer namespace.                                                                                                                       |
 | `correct-answer`                                                                                                      |           | ---                      | The correct answer, either as a parsable string or canonical form dict, **that sets inference data for the problem**                             |
 | `operator`                                                                                                            | ☑️        | required if not inferred | A built-in operator, or `custom` for a custom LaTeX operator. When omitted, a whole string/dictionary correct answer must identify the operator. |
+| `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                        |
 | `limits`                                                                                                              | ☑️        | `auto`                   | `bounds`, `domain`, or `approach`; `auto` uses the table below only when the limits form cannot be inferred from a whole answer.                 |
 | `limit-direction`                                                                                                     | ☑️        | `two-sided`              | `two-sided`, `from-left`, or `from-right` for limits.                                                                                            |
-| `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body. When omitted, a whole string/dictionary correct answer must identify it.                        |
-| `variables`                                                                                                           |           | `""`                     | Comma-separated extra allowed symbols, e.g. `"Gamma,theta,N"`.                                                                                   |
+| `variables`                                                                                                           |           | `""`                     | Comma-separated extra allowed symbols beyond the index variable, e.g. `"Gamma,k,N"`.                                                             |
+| `custom-functions`                                                                                                    |           | `""`                     | Comma-separated symbolic function names allowed in correct answers and student input, e.g. `"f,g"`.                                              |
 | `operator-latex`                                                                                                      |           | ---                      | Operator display LaTeX. It can override a built-in operator's symbol; without `operator`, it implies `operator="custom"`.                        |
 | `allowed-blank`                                                                                                       |           | `none`                   | Permit blank `limits`, the `body`, `all` fields, or `none`.                                                                                      |
 | `show-help-text`                                                                                                      |           | `true`                   | Show symbolic-entry help beside the body input. Set to `false` to hide it.                                                                       |
@@ -42,7 +43,7 @@ inconvenient.
 | `weight`                                                                                                              |           | `1`                      | PrairieLearn score weight.                                                                                                                       |
 | `correct-answer-start`, `correct-answer-end`, `correct-answer-domain`, `correct-answer-target`, `correct-answer-body` | ☑️        | ---                      | Alternative string answers for the visible component fields. Supply every component for the resolved limits form.                                |
 
-## Operators and limits
+## Operators and Limits
 
 With `limits="auto"`, the element first tries to infer the limits form from a
 whole correct answer. The auto limits in the table below are fallbacks used only
@@ -59,58 +60,64 @@ when that inference fails or is unavailable.
 | Min, Max                           | $\min$, $\max$                    | domain                       | bounds, domain           |
 | Custom                             | ---                               | inferred from a whole answer | bounds, domain, approach |
 
-Bounds forms collect a lower bound, an upper bound, and a body. Domain forms
-collect a domain and a body, while approach forms collect a target and a body.
+`bounds` forms collect a lower bound, an upper bound, and a body.
+`domain` forms collect a domain and a body.
+Lastly, `approach` forms colect a target bound and a body.
 The element displays and parses only the inputs required by the selected form.
-For a one-sided limit, the target is displayed with a `-` or `+`; the combined
-answer records the corresponding descriptive direction.
 
-Custom operators infer their limits form from a parseable whole `Custom(...)`
-answer. Without one, they require explicit `limits="bounds"`, `limits="domain"`,
-or `limits="approach"`. They are ungraded when no correct answer is supplied.
-A custom operator with a correct answer must use
-`grading-method="exact"` or `grading-method="component"`; symbolic equivalence
-is unavailable because arbitrary LaTeX does not identify a SymPy operation.
-For a whole correct answer, use the parseable syntax `Custom(body, limits)`,
-where `limits` is `(index, domain)`, `(index, lower, upper)`, or
-`(index, target, direction)` and determines the limits form. Approach
-directions use the same `"+"`, `"-"`, and `"+-"` values as `Limit`. Supplying
-`operator-latex` makes
-the separate `operator="custom"` attribute optional.
-Component grading uses the same per-field weights as built-in operators. Their
-canonical submissions include an additional `"operator_latex"` key so the
-stored response remains self-describing:
+### Custom Operators
 
-```html
+Here are some examples of the custom operator in use:
+
+```xml
 <pl-big-operator-input
   answers-name="expectation"
   correct-answer="Custom(k**2, (k, {1, 2}))"
-  grading-method="component"
-  index-variable="k"
   operator-latex="\mathbb{E}"
+  grading-method="component"
 ></pl-big-operator-input>
 ```
 
-```html
+```xml
 <pl-big-operator-input
   answers-name="evaluation"
-  correct-answer="Custom(f(x), (x, 0, '+-'))"
-  grading-method="component"
-  index-variable="x"
+  operator="custom"
   operator-latex="\operatorname{eval}"
+  limits="approach"
+  index-variable="x"
+  custom-functions="f"
+  correct-answer-target="0"
+  limit-direction="both-sides"
+  correct-answer-body="f(x)"
+  grading-method="component"
 ></pl-big-operator-input>
 ```
 
 For an integral with `limits="domain"`, the domain is rendered as the sole subscript without an `index-variable \in` prefix, for example `\int_\Gamma z\,\mathrm{d}z`. Use `exact` or `component` grading because SymPy has no lossless indexed representation for this notation.
 
+### Limitations of Custom Operators
+
+Custom operators provide a custom display symbol and the standard input
+layouts; they do not define a new symbolic operation in SymPy. Consequently:
+
+- `grading-method="equivalent"` is unavailable. A graded custom operator must
+  use `grading-method="exact"` or `grading-method="component"`.
+- `limits="auto"` works only when a parseable whole `Custom(...)` correct answer
+  supplies the limits form. Otherwise, set `limits` explicitly to `bounds`,
+  `domain`, or `approach`.
+- `operator-latex` controls presentation only and must be supplied. It does not
+  provide parsing or mathematical semantics for the operator.
+- Without a correct answer, the element records submissions but remains
+  ungraded, just like an ungraded built-in operator.
+
 ## Correct answers
 
-### Whole `correct-answer` (preferred)
+### Parsable `correct-answer` (preferred)
 
 When `operator` is omitted, a whole correct answer supplied as a string or
 JSON-safe dictionary identifies the built-in operator. Supported strings begin
 with `Sum`, `Product`, `Integral`, `Limit`, `Union`, `Intersection`,
-`DisjointUnion`, `And`, `Or`, `Min`, or `Max`. A canonical dictionary uses its
+`DisjointUnion`, `And`, `Or`, `Min`, `Max`, or `Custom`. A canonical dictionary uses its
 `operator` field, while a PrairieLearn SymPy JSON dictionary can identify the
 formatted `Sum`, `Product`, `Integral`, and `Limit` expressions.
 In parseable whole answers, `(index, domain)` selects `limits="domain"`,
@@ -123,7 +130,6 @@ same tuple-length rule. An explicit
 <pl-big-operator-input
   answers-name="total"
   correct-answer="Product(k + 1, (k, 1, 4))"
-  index-variable="k"
 ></pl-big-operator-input>
 ```
 
@@ -133,7 +139,6 @@ A domain integral can therefore omit both the operator and limits attributes:
 <pl-big-operator-input
   answers-name="contour"
   correct-answer="Integral(z**2, (z, Gamma))"
-  index-variable="z"
   variables="Gamma"
 ></pl-big-operator-input>
 ```
