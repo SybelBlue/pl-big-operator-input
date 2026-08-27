@@ -448,6 +448,7 @@ def _field(
     data: dict[str, Any] | pl.QuestionData,
     prefix: str | None = None,
     suffix: str | None = None,
+    score: float | None = None,
 ) -> dict[str, Any]:
     name = config.name(component)
     variables = (
@@ -463,22 +464,50 @@ def _field(
         allow_sets=_requires_set(config, cast(Component, component)),
         allow_complex=config.allow_complex,
         show_help_text=component == "body" and config.show_help_text,
+        show_score=config.grading == "component",
         prefix=prefix,
         suffix=suffix,
     )
     return {
-        "html": symbolic_input_adapter.render(field_markup, data, aria_label=label),
+        "html": symbolic_input_adapter.render(
+            field_markup, data, aria_label=label, score=score
+        ),
+    }
+
+
+def _component_scores(config: Config, data: pl.QuestionData) -> dict[Component, float]:
+    if config.grading != "component" or config.answer not in data.get(
+        "partial_scores", {}
+    ):
+        return {}
+    submitted_json = data.get("submitted_answers", {}).get(config.answer)
+    correct_json = _correct(config, data)
+    if not isinstance(submitted_json, dict) or correct_json is None:
+        return {}
+    submitted = _values(config, submitted_json)
+    correct = _values(config, correct_json)
+    return {
+        component: float(submitted[component] == correct[component])
+        for component in config.components
     }
 
 
 def _question(config: Config, data: pl.QuestionData) -> str:
     index = sympy.latex(sympy.Symbol(config.index))
+    component_scores = _component_scores(config, data)
     context: dict[str, Any] = {
         config.limits: True,
         "integral": config.operator == "integral",
         "operator_latex": config.operator_latex,
         "index_label": index,
-        "body_field": _field(config, "body", "Operator body", 16, data),
+        "body_field": _field(
+            config,
+            "body",
+            "Operator body",
+            16,
+            data,
+            score=component_scores.get("body"),
+        ),
     }
     partial_score = data.get("partial_scores", {}).get(config.answer)
     if partial_score is not None:
@@ -491,8 +520,11 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             7,
             data,
             None if config.operator == "integral" else rf"\({index} = \)",
+            score=component_scores.get("lower"),
         )
-        context["upper_field"] = _field(config, "upper", "Upper bound", 7, data)
+        context["upper_field"] = _field(
+            config, "upper", "Upper bound", 7, data, score=component_scores.get("upper")
+        )
     elif config.limits == "domain":
         context["annotation_field"] = _field(
             config,
@@ -501,6 +533,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             10,
             data,
             None if config.operator == "integral" else rf"\({index} \in \)",
+            score=component_scores.get("domain"),
         )
     else:
         dir = {"two-sided": None, "from-left": "−", "from-right": "+"}[config.direction]
@@ -512,6 +545,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             data,
             rf"\({index} \to \)",
             dir and rf"\({{}}^{dir}\)",
+            score=component_scores.get("target"),
         )
     return chevron.render(
         (HERE / "pl-big-operator-input.mustache").read_text(),
