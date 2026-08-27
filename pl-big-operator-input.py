@@ -132,9 +132,7 @@ def _raw_correct_answer(
         return correct_attribute
     if data is None:
         return None
-    return data.get("correct_answers", {}).get(
-        answer, data.get("params", {}).get(f"_pl_big_operator_input_correct_{answer}")
-    )
+    return data.get("correct_answers", {}).get(answer)
 
 
 def _binder_limits(value: Any) -> LimitFormat | None:
@@ -557,9 +555,6 @@ def prepare(element_html: str, data: pl.QuestionData) -> None:
     correct = _correct(config, data)
     if correct is not None:
         data.setdefault("correct_answers", {})[config.answer] = correct
-        data.setdefault("params", {})[
-            f"_pl_big_operator_input_correct_{config.answer}"
-        ] = correct
 
 
 def _field(
