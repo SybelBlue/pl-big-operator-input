@@ -222,11 +222,10 @@ def _config(html: str, data: Any | None = None) -> Config:
     inferred_operator, inferred_limits = None, None
     if not supplied_components and isinstance(raw_correct, (str, dict)):
         inferred_operator, inferred_limits = _infer_spec(raw_correct)
-    if explicit_operator is None and custom_latex is None:
-        if inferred_operator is None:
-            raise ValueError(
-                'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
-            )
+    if explicit_operator is None and custom_latex is None and inferred_operator is None:
+        raise ValueError(
+            'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
+        )
     operator = (
         explicit_operator
         or ("custom" if custom_latex is not None else None)
