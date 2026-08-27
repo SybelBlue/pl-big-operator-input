@@ -6,6 +6,7 @@ SHELL := /bin/bash
 UV_CACHE_DIR ?= /private/tmp/learnvia_uv_cache
 
 LIB_TEST_PATHS := elements/**/tests
+SCRIPT_TEST_PATHS := scripts/tests
 
 export UV_CACHE_DIR
 
@@ -13,7 +14,7 @@ DOCKER_JOBS_DIR ?= $(shell mktemp -d /tmp/pl-docker-jobs.XXXXXX)
 
 export DOCKER_JOBS_DIR
 
-.PHONY: clean deps venv test typecheck format-py format-json format-html format check-format check-pl-schemas ci-dryrun fetch-pl-schemas dev docker
+.PHONY: clean deps venv test typecheck format-py format-json format-html format check-format check-pl-schemas update-prairielearn-pin check-prairielearn-pin ci-dryrun fetch-pl-schemas dev docker
 
 # install deps, RUN ME FIRST
 # requires pnpm and uv to be installed on the commandline
@@ -30,10 +31,10 @@ fetch-pl-schemas:
 
 # testing and validation
 test:
-	uv run --active pytest $(LIB_TEST_PATHS) $(PYTEST_ARGS)
+	uv run --active pytest $(LIB_TEST_PATHS) $(SCRIPT_TEST_PATHS) $(PYTEST_ARGS)
 
 typecheck:
-	uv run --active pyright .
+	uv run --active pyright
 
 check-format:
 	uv run --active ruff format --check .
@@ -41,7 +42,13 @@ check-format:
 check-pl-schemas:
 	uv run --active scripts/pull_down_prairielearn_schemas.py
 
-ci-dryrun: test typecheck check-format check-pl-schemas
+update-prairielearn-pin:
+	uv run --active scripts/update_prairielearn_pin.py --ref "$(PL_REF)"
+
+check-prairielearn-pin:
+	uv run --active scripts/update_prairielearn_pin.py --check
+
+ci-dryrun: test typecheck check-format check-pl-schemas check-prairielearn-pin
 
 
 # format source

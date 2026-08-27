@@ -176,7 +176,7 @@ def test_limit_directions(direction, sympy_direction):
     if direction == "two-sided":
         assert "pl-big-operator-input__suffix" not in rendered
     else:
-        assert 'class="input-group-text pl-big-operator-input__suffix"' in rendered
+        assert f'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
         assert ("−" if direction == "from-left" else "+") in rendered
 
 
@@ -402,15 +402,14 @@ def test_parse_errors_are_rendered_with_their_fields(invalid_field, valid_field)
     mod.parse(markup, state)
 
     rendered = mod.render(markup, state)
-    error_id = f"big-operator-input-error-{invalid_field}"
-    assert f'aria-describedby="{error_id}"' in rendered
-    assert f'id="{error_id}"' in rendered
-    assert (
-        '<span id="' + error_id + '" class="invalid-feedback d-block" role="alert">'
-        in rendered
-    )
+    assert f'id="symbolic-input-{invalid_field}"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert "Invalid" in rendered and "More info…" in rendered
     assert "This field must be a set." in rendered
-    assert f"big-operator-input-error-{valid_field}" not in rendered
+    valid_field_markup = rendered[
+        rendered.index(f'id="symbolic-input-{valid_field}"') :
+    ]
+    assert 'aria-invalid="true"' not in valid_field_markup.split("</math-field>", 1)[0]
 
 
 def test_partially_blank_submission_has_a_descriptive_field_error():
@@ -420,8 +419,9 @@ def test_partially_blank_submission_has_a_descriptive_field_error():
 
     assert state["format_errors"]["op-body"] == "No submitted answer."
     rendered = mod.render(markup, state)
-    assert ">No submitted answer.</span>" in rendered
-    assert ">0</span>" not in rendered
+    assert "No submitted answer." in rendered
+    assert 'id="symbolic-input-op-body"' in rendered
+    assert 'aria-invalid="true"' in rendered
 
 
 def test_wholly_blank_required_submission_marks_every_field_invalid():
@@ -437,7 +437,8 @@ def test_wholly_blank_required_submission_marks_every_field_invalid():
         "op-body": "No submitted answer.",
     }
     rendered = mod.render(markup, state)
-    assert rendered.count(">No submitted answer.</span>") == 3
+    assert rendered.count('aria-invalid="true"') == 3
+    assert rendered.count("No submitted answer.") == 3
 
 
 def test_initial_latex_is_stored_outside_math_fields():
@@ -453,10 +454,21 @@ def test_initial_latex_is_stored_outside_math_fields():
     )
 
     for name in ("op-domain", "op-body"):
-        math_field = document.get_element_by_id(f"big-operator-input-{name}")
-        latex_input = document.get_element_by_id(f"big-operator-input-latex-{name}")
+        math_field = document.get_element_by_id(f"symbolic-input-{name}")
+        latex_input = document.get_element_by_id(f"symbolic-input-latex-{name}")
         assert (math_field.text or "").strip() == ""
         assert latex_input.get("value") == r"\emptyset"
+
+
+def test_question_fields_are_rendered_by_vendored_symbolic_input():
+    rendered = mod.render(html(), data())
+
+    assert rendered.count("pl-symbolic-input") >= 3
+    assert "window.PLSymbolicInput" in rendered
+    assert "window.PLBigOperatorInput" not in rendered
+    assert 'aria-label="Lower bound"' in rendered
+    assert 'aria-label="Upper bound"' in rendered
+    assert 'aria-label="Operator body"' in rendered
 
 
 def test_non_set_combinator_bodies_still_accept_expressions():

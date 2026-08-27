@@ -70,6 +70,8 @@ Start customizing the template by updating `infoCourse.json`, the starter course
 | `make dev` | Launch the local PrairieLearn development runner |
 | `make docker` | Launch PrairieLearn using the official Docker image |
 | `make fetch-pl-schemas` | Refresh the local PrairieLearn schemas |
+| `make check-prairielearn-pin` | Verify the vendored symbolic input and Python dependency share one upstream commit |
+| `make update-prairielearn-pin PL_REF=<ref>` | Vendor a PrairieLearn ref and regenerate the Python lock |
 | `make clean` | Remove local dependencies, caches, and build artifacts |
 
 Pass additional options to pytest with `PYTEST_ARGS`. For example:
