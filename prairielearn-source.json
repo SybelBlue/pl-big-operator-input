@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/PrairieLearn/PrairieLearn.git",
-  "commit": "2c60f70a0ef817a2dc33fe15cb8e56de5035d6ed",
+  "commit": "14e65830861bee4cfe10c3ef73b000794edd66ed",
   "sourcePath": "apps/prairielearn/elements/pl-symbolic-input",
   "licensePath": "LICENSE"
 }
