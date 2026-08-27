@@ -337,7 +337,7 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
     return _canonical(config, {"lower": lower, "upper": upper, "body": value.function})
 
 
-def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
+def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
     prepared_key = f"_pl_big_operator_input_correct_{config.answer}"
     raw = (
         dict(config.correct_components)
@@ -369,7 +369,7 @@ def _correct(config: Config, data: dict[str, Any]) -> dict[str, Any] | None:
     )
 
 
-def prepare(element_html: str, data: dict[str, Any]) -> None:
+def prepare(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html)
     correct = _correct(config, data)
     if correct is not None:
@@ -384,7 +384,7 @@ def _field(
     component: str,
     label: str,
     size: int,
-    data: dict[str, Any],
+    data: dict[str, Any] | pl.QuestionData,
     prefix: str | None = None,
     suffix: str | None = None,
 ) -> dict[str, Any]:
@@ -405,7 +405,7 @@ def _field(
     }
 
 
-def _question(config: Config, data: dict[str, Any]) -> str:
+def _question(config: Config, data: pl.QuestionData) -> str:
     index = sympy.latex(sympy.Symbol(config.index))
     context: dict[str, Any] = {
         config.limits: True,
@@ -416,7 +416,7 @@ def _question(config: Config, data: dict[str, Any]) -> str:
     }
     partial_score = data.get("partial_scores", {}).get(config.answer)
     if partial_score is not None:
-        context["score_badge"] = _score_badge(float(partial_score.get("score", 0)))
+        context["score_badge"] = _score_badge(float(partial_score.get("score") or 0))
     if config.limits == "bounds":
         context["lower_field"] = _field(
             config,
@@ -455,8 +455,8 @@ def _question(config: Config, data: dict[str, Any]) -> str:
     )
 
 
-def _tex(config: Config, data: dict[str, Any]) -> str:
-    raw = data.get("raw_submitted_answers", {})
+def _tex(config: Config, raw: dict[str, Any] | None) -> str:
+    raw = raw or {}
     get = lambda c: raw.get(config.name(c), "?")
     index = sympy.latex(sympy.Symbol(config.index))
     op = config.operator_latex
@@ -477,14 +477,14 @@ def _tex(config: Config, data: dict[str, Any]) -> str:
 def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
     values = _values(config, structured)
     raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
-    return _tex(config, {"raw_submitted_answers": raw})
+    return _tex(config, raw)
 
 
-def _submitted_tex(config: Config, data: dict[str, Any]) -> str:
+def _submitted_tex(config: Config, data: pl.QuestionData) -> str:
     structured = data.get("submitted_answers", {}).get(config.answer)
     if isinstance(structured, dict):
         return _structured_tex(config, structured)
-    return _tex(config, data)
+    return _tex(config, data.get("raw_submitted_answers"))
 
 
 def _score_badge(score: float) -> dict[str, Any]:
@@ -495,7 +495,7 @@ def _score_badge(score: float) -> dict[str, Any]:
     return {"partial": round(score * 100)}
 
 
-def render(element_html: str, data: dict[str, Any]) -> str:
+def render(element_html: str, data: pl.QuestionData) -> str:
     config = _config(element_html)
     panel = data.get("panel", "question")
     if panel == "question":
@@ -513,7 +513,7 @@ def render(element_html: str, data: dict[str, Any]) -> str:
     context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
     partial_score = data.get("partial_scores", {}).get(config.answer)
     if partial_score is not None:
-        context.update(_score_badge(float(partial_score.get("score", 0))))
+        context.update(_score_badge(float(partial_score.get("score") or 0)))
     return chevron.render(
         (HERE / "pl-big-operator-input-submission.mustache").read_text(),
         context,
@@ -543,8 +543,8 @@ def _is_set_input(value: sympy.Basic) -> bool:
     return isinstance(value, (sympy.Set, sympy.Symbol))
 
 
-def _blank(config: Config, data: dict[str, Any]) -> bool:
-    raw = data.get("raw_submitted_answers", {})
+def _blank(config: Config, raw: dict[str, Any] | None) -> bool:
+    raw = raw or {}
     return all(not str(raw.get(config.name(c), "")).strip() for c in config.components)
 
 
@@ -578,7 +578,7 @@ def _parse_values(
 def parse(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html)
     submitted = data.setdefault("submitted_answers", {})
-    if _blank(config, data):
+    if _blank(config, data.get("raw_submitted_answers")):
         submitted[config.answer] = "" if config.allow_blank else None
         if not config.allow_blank:
             errors = data.setdefault("format_errors", {})
@@ -640,12 +640,12 @@ def _equivalent(
         return False
 
 
-def grade(element_html: str, data: dict[str, Any]) -> None:
+def grade(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html)
     correct_json = _correct(config, data)
     if correct_json is None:
         return
-    if config.allow_blank and _blank(config, data):
+    if config.allow_blank and _blank(config, data.get("raw_submitted_answers")):
         score = 0.0
     else:
         submitted_json = data.get("submitted_answers", {}).get(config.answer)
@@ -672,3 +672,4 @@ def grade(element_html: str, data: dict[str, Any]) -> None:
         "score": score,
         "weight": config.weight,
     }
+    pl.set_weighted_score_data(data)
