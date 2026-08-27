@@ -191,41 +191,71 @@ def _formatted_call(source: str, function_name: str) -> tuple[str, list[str]] | 
     return arguments[0], limits
 
 
-def _infer_spec(raw: Any) -> tuple[str | None, LimitFormat | None]:
+def _symbol_name(value: Any) -> str | None:
+    return str(value) if isinstance(value, sympy.Symbol) else None
+
+
+def _binder_index(value: Any) -> str | None:
+    if isinstance(value, sympy.Limit):
+        return _symbol_name(value.args[1])
+    if (
+        isinstance(value, (sympy.Sum, sympy.Product, sympy.Integral))
+        and len(value.limits) == 1
+    ):
+        return _symbol_name(value.limits[0][0])  # type: ignore
+    return None
+
+
+def _infer_spec(
+    raw: Any,
+) -> tuple[str | None, LimitFormat | None, str | None]:
     if isinstance(raw, str):
         match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
-        operator = STRING_OPERATORS.get(match.group(1)) if match else None
-        if operator is None:
-            return None, None
-        formatted = _formatted_call(raw, OPERATOR_FUNCTIONS[operator])
+        function = match.group(1) if match else None
+        parsed_operator = (
+            "custom" if function == "Custom" else STRING_OPERATORS.get(function or "")
+        )
+        if parsed_operator is None:
+            return None, None, None
+        operator = parsed_operator if parsed_operator != "custom" else None
+        formatted = _formatted_call(raw, OPERATOR_FUNCTIONS[parsed_operator])
         if formatted is not None:
-            if operator == "limit":
-                return operator, "approach"
+            try:
+                index = _symbol_name(sympy.sympify(formatted[1][0]))
+            except (IndexError, sympy.SympifyError, TypeError):
+                index = None
+            if parsed_operator == "limit":
+                return operator, "approach", index
             limit_count = len(formatted[1])
             if limit_count == 2:
-                return operator, "domain"
+                return operator, "domain", index
             if limit_count == 3:
-                return operator, "bounds"
-            return operator, None
+                return operator, "bounds", index
+            return operator, None, index
         try:
             value = _decode(raw)
         except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
-            return operator, None
-        return operator, _binder_limits(value)
+            return operator, None, None
+        return operator, _binder_limits(value), _binder_index(value)
     if not isinstance(raw, dict):
-        return None, None
+        return None, None, None
     if raw.get("_type") == "operator_expression":
         operator = raw.get("operator")
         limits = raw.get("limits")
+        try:
+            index = _symbol_name(_decode(raw.get("index")))
+        except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
+            index = None
         return (
             operator if operator in OPS else None,
             cast(LimitFormat, limits) if limits in COMPONENT_MAP else None,
+            index,
         )
     if raw.get("_type") == "sympy":
         try:
             value = _decode(raw)
         except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
-            return None, None
+            return None, None, None
         for operator, expected in {
             "sum": sympy.Sum,
             "product": sympy.Product,
@@ -233,19 +263,54 @@ def _infer_spec(raw: Any) -> tuple[str | None, LimitFormat | None]:
             "limit": sympy.Limit,
         }.items():
             if isinstance(value, expected):
-                return operator, _binder_limits(value)
-    return None, None
+                return operator, _binder_limits(value), _binder_index(value)
+    return None, None, None
+
+
+def _infer_direction(raw: Any, operator: str) -> str | None:
+    if isinstance(raw, dict):
+        if raw.get("_type") == "operator_expression":
+            direction = raw.get("direction")
+            return direction if direction in DIRECTIONS else None
+        if raw.get("_type") == "sympy":
+            try:
+                value = _decode(raw)
+            except Exception:  # noqa: BLE001 -- malformed author JSON is validated later.
+                return None
+            if isinstance(value, sympy.Limit):
+                return {value: key for key, value in DIRECTIONS.items()}.get(
+                    str(value.args[3])
+                )
+        return None
+    if not isinstance(raw, str):
+        return None
+    function_name = OPERATOR_FUNCTIONS.get(operator)
+    if function_name is None:
+        return None
+    formatted = _formatted_call(raw, function_name)
+    if formatted is None or len(formatted[1]) != 3:
+        return None
+    direction_source = formatted[1][2].strip()
+    if (
+        len(direction_source) < 2
+        or direction_source[0] not in {"'", '"'}
+        or direction_source[-1] != direction_source[0]
+    ):
+        return None
+    return {value: key for key, value in DIRECTIONS.items()}.get(direction_source[1:-1])
 
 
 def _config(html: str, data: Any | None = None) -> Config:
     element = lxml.html.fragment_fromstring(html)
-    required = {}
-    for name in ("answers-name", "index-variable"):
-        value = pl.get_string_attrib(element, name, None)
-        if value is None or not value.strip():
-            raise ValueError(f'Required attribute "{name}" missing')
-        required[name] = value.strip()
+    answer = pl.get_string_attrib(element, "answers-name", None)
+    if answer is None or not answer.strip():
+        raise ValueError('Required attribute "answers-name" missing')
+    answer = answer.strip()
+    explicit_index = pl.get_string_attrib(element, "index-variable", None)
+    explicit_index = explicit_index.strip() if explicit_index else None
     explicit_operator = pl.get_string_attrib(element, "operator", None)
+    if explicit_operator is not None:
+        explicit_operator = explicit_operator[:1].lower() + explicit_operator[1:]
     custom_latex = pl.get_string_attrib(element, "operator-latex", None)
     correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
     supplied_components: dict[Component, str] = {
@@ -254,11 +319,16 @@ def _config(html: str, data: Any | None = None) -> Config:
         if (value := pl.get_string_attrib(element, attribute, None)) is not None
     }
     raw_correct = _raw_correct_answer(
-        required["answers-name"], correct_attribute, supplied_components, data
+        answer, correct_attribute, supplied_components, data
     )
-    inferred_operator, inferred_limits = None, None
+    inferred_operator, inferred_limits, inferred_index = None, None, None
     if not supplied_components and isinstance(raw_correct, (str, dict)):
-        inferred_operator, inferred_limits = _infer_spec(raw_correct)
+        inferred_operator, inferred_limits, inferred_index = _infer_spec(raw_correct)
+    index = explicit_index or inferred_index
+    if index is None:
+        raise ValueError(
+            'The "index-variable" attribute is required; it cannot be inferred from the provided correct-answer.'
+        )
     if explicit_operator is None and custom_latex is None and inferred_operator is None:
         raise ValueError(
             'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
@@ -315,8 +385,15 @@ def _config(html: str, data: Any | None = None) -> Config:
     body_weight = pl.get_integer_attrib(element, "body-relative-weight", 3)
     if body_weight is None or body_weight < 1:
         raise ValueError('Attribute "body-relative-weight" must be positive.')
+    direction_attribute = pl.get_string_attrib(element, "limit-direction", None)
     direction = (
-        pl.get_string_attrib(element, "limit-direction", "two-sided") or "two-sided"
+        direction_attribute
+        or (
+            _infer_direction(raw_correct, operator)
+            if limits == "approach" and not supplied_components
+            else None
+        )
+        or "two-sided"
     )
     if direction not in DIRECTIONS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
@@ -353,11 +430,11 @@ def _config(html: str, data: Any | None = None) -> Config:
             'Custom operators with a correct answer require grading-method="exact" or "component".'
         )
     return Config(
-        required["answers-name"],
+        answer,
         operator,
         operator_latex,
         cast(LimitFormat, limits),
-        required["index-variable"],
+        index,
         tuple(x.strip() for x in variables.split(",") if x.strip()),
         direction,
         bool(pl.get_boolean_attrib(element, "allow-blank", False)),
