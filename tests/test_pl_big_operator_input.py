@@ -317,9 +317,16 @@ def test_formatted_limit_accepts_documented_directions(direction, public_directi
     assert state["correct_answers"]["op"]["direction"] == public_direction
 
 
-def test_formatted_limit_rejects_unknown_direction():
-    with pytest.raises(ValueError, match='must be "\\+", "-", or "\\+-"'):
-        mod.prepare(html(**{"correct-answer": "Limit(k, (k, 0, 'sideways'))"}), data())
+@pytest.mark.parametrize(
+    "correct",
+    [
+        "Limit(k, (k, 0, 'sideways'))",
+        "Limit(k, k, 0, dir='sideways')",
+    ],
+)
+def test_limit_rejects_unknown_direction_in_either_string_form(correct):
+    with pytest.raises(ValueError):
+        mod.prepare(html(**{"correct-answer": correct}), data())
 
 
 def test_infers_domain_integral_from_two_item_binder():
