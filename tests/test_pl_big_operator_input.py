@@ -55,6 +55,32 @@ def test_auto_limits(operator, limits):
     assert mod._config(html(operator=operator)).limits == limits
 
 
+@pytest.mark.parametrize("limits", ["bounds", "domain"])
+def test_custom_operator_requires_explicit_supported_limits(limits):
+    config = mod._config(
+        html(operator="custom", limits=limits, **{"operator-latex": r"\mathbb{E}"})
+    )
+
+    assert config.operator == "custom"
+    assert config.operator_latex == r"\mathbb{E}"
+    assert config.limits == limits
+
+
+def test_custom_operator_rejects_auto_limits():
+    with pytest.raises(ValueError, match="require explicit"):
+        mod.prepare(html(operator="custom", **{"operator-latex": r"\star"}), data())
+
+
+def test_custom_operator_requires_nonempty_latex():
+    with pytest.raises(ValueError, match="required"):
+        mod.prepare(html(operator="custom", limits="bounds"), data())
+
+
+def test_builtin_operator_rejects_custom_latex():
+    with pytest.raises(ValueError, match="only be used"):
+        mod.prepare(html(**{"operator-latex": r"\star"}), data())
+
+
 @pytest.mark.parametrize(
     "operator",
     [
@@ -493,6 +519,124 @@ def test_allow_blank_submission_is_gradable_as_incorrect():
     assert "format_errors" not in state
     assert state["submitted_answers"]["op"] == ""
     assert state["partial_scores"]["op"] == {"score": 0.0, "weight": 1}
+
+
+def test_ungraded_submission_is_parsed_but_not_scored():
+    state = data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"})
+    markup = html()
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert "op" not in state["correct_answers"]
+    assert state["submitted_answers"]["op"]["_type"] == "operator_expression"
+    assert state.get("partial_scores", {}) == {}
+
+
+def test_ungraded_submission_panel_shows_response_without_score_badge():
+    markup = html()
+    state = data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"})
+    mod.parse(markup, state)
+    state["panel"] = "submission"
+
+    rendered = mod.render(markup, state)
+
+    assert r"\sum_{k=1}^{4} k^{2}" in rendered
+    assert "badge" not in rendered
+
+
+def test_ungraded_answer_panel_is_empty():
+    assert mod.render(html(), data(panel="answer")) == ""
+
+
+def test_ungraded_blank_submission_still_requires_allow_blank():
+    state = data(raw={"op-start": "", "op-end": "", "op-body": ""})
+
+    mod.parse(html(), state)
+
+    assert state["submitted_answers"]["op"] is None
+    assert set(state["format_errors"]) == {"op-start", "op-end", "op-body"}
+
+
+@pytest.mark.parametrize(
+    ("limits", "raw", "expected"),
+    [
+        (
+            "bounds",
+            {"op-start": "1", "op-end": "4", "op-body": "k^2"},
+            r"\mathbb{E}_{k=1}^{4} k^{2}",
+        ),
+        (
+            "domain",
+            {"op-domain": "{1, 2}", "op-body": "k^2"},
+            r"\mathbb{E}_{k\in \left\{1, 2\right\}} k^{2}",
+        ),
+    ],
+)
+def test_custom_operator_is_self_describing_ungraded_input(limits, raw, expected):
+    markup = html(operator="custom", limits=limits, **{"operator-latex": r"\mathbb{E}"})
+    state = data(raw=raw)
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    state["panel"] = "submission"
+    rendered = mod.render(markup, state)
+
+    answer = state["submitted_answers"]["op"]
+    assert answer["operator"] == "custom"
+    assert answer["operator_latex"] == r"\mathbb{E}"
+    assert expected in rendered
+    assert state.get("partial_scores", {}) == {}
+    assert "badge" not in rendered
+
+
+def test_custom_operator_exact_grading():
+    markup = html(
+        operator="custom",
+        limits="bounds",
+        **{
+            "operator-latex": r"\mathbb{E}",
+            "grading-method": "exact",
+            "correct-answer-start": "1",
+            "correct-answer-end": "4",
+            "correct-answer-body": "k^2",
+        },
+    )
+    state = data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["correct_answers"]["op"]["operator_latex"] == r"\mathbb{E}"
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
+def test_custom_operator_correct_answer_requires_exact_grading():
+    with pytest.raises(ValueError, match='grading-method="exact"'):
+        mod.prepare(
+            html(
+                operator="custom",
+                limits="bounds",
+                **{
+                    "operator-latex": r"\star",
+                    "correct-answer-start": "1",
+                    "correct-answer-end": "4",
+                    "correct-answer-body": "k^2",
+                },
+            ),
+            data(),
+        )
+
+
+def test_custom_operator_correct_answer_data_requires_exact_grading():
+    with pytest.raises(ValueError, match='grading-method="exact"'):
+        mod.prepare(
+            html(operator="custom", limits="bounds", **{"operator-latex": r"\star"}),
+            data(sympy.Integer(1)),
+        )
 
 
 def test_integral_and_submission_reconstruct_complete_notation():
