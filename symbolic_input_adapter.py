@@ -88,10 +88,8 @@ def parse(field_markup: str, data: dict[str, Any]) -> None:
     had_format_errors = "format_errors" in data
     data.setdefault("correct_answers", {})
     data.setdefault("format_errors", {})
-    data.setdefault("partial_scores", {})
     data.setdefault("raw_submitted_answers", {})
     data.setdefault("submitted_answers", {})
-    data.setdefault("panel", "question")
     view = data
     element = lxml.html.fragment_fromstring(field_markup)
     name = element.get("answers-name")
