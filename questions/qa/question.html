@@ -1,118 +1,72 @@
 <pl-question-panel>
     <h2><code>pl-big-operator-input</code> examples</h2>
 </pl-question-panel>
-<div class="row">
-    <div class="col-md-6">
-        <p>Bounded sum:</p>
-        <pl-big-operator-input
-            answers-name="sum"
-            operator="sum"
-            index-variable="k"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-    <div class="col-md-6">
-        <p>Bounded product:</p>
-        <pl-big-operator-input
-            answers-name="product"
-            operator="product"
-            index-variable="k"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
+
+<div class="table-responsive">
+    <table class="table table-bordered align-middle">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 15rem; min-width: 15rem; max-width: 15rem">Description</th>
+                <th scope="col">Correct answer</th>
+                <th scope="col">Input field</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Bounded sum<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \sum_{k=1}^{4} k^2$</td>
+                <td><pl-big-operator-input answers-name="sum" operator="sum" index-variable="k" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Bounded product<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \prod_{k=1}^{4} k$</td>
+                <td><pl-big-operator-input answers-name="product" operator="product" index-variable="k" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Range integral<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \int_{0}^{1} x^2\,dx$</td>
+                <td><pl-big-operator-input answers-name="integral" operator="integral" index-variable="x" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain integral<br><small><code>grading-method="exact"</code></small></td>
+                <td>$\displaystyle \int_{\Gamma} z\,dz$</td>
+                <td><pl-big-operator-input answers-name="contour" operator="integral" limits="domain" index-variable="z" variables="Gamma" grading-method="exact" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed minimum<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \min_{x \in \{1,2\}} x^2$</td>
+                <td><pl-big-operator-input answers-name="min" operator="min" index-variable="x" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed maximum<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \max_{x \in \{1,2\}} x^2$</td>
+                <td><pl-big-operator-input answers-name="max" operator="max" index-variable="x" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed union<br><small><code>grading-method="exact"</code></small></td>
+                <td>$\displaystyle \bigcup_{k \in \{1,2\}} \{k\}$</td>
+                <td><pl-big-operator-input answers-name="union" operator="union" index-variable="k" grading-method="exact" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed intersection<br><small><code>grading-method="exact"</code></small></td>
+                <td>$\displaystyle \bigcap_{k \in \{1,2\}} \{k\}$</td>
+                <td><pl-big-operator-input answers-name="intersection" operator="intersection" index-variable="k" grading-method="exact" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed conjunction<br><small><code>grading-method="exact"</code></small></td>
+                <td>$\displaystyle \bigwedge_{k \in \{1,2\}} k$</td>
+                <td><pl-big-operator-input answers-name="and" operator="and" index-variable="k" grading-method="exact" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Domain-indexed disjunction<br><small><code>grading-method="exact"</code></small></td>
+                <td>$\displaystyle \bigvee_{k \in \{1,2\}} k$</td>
+                <td><pl-big-operator-input answers-name="or" operator="or" index-variable="k" grading-method="exact" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+            <tr>
+                <td>Right-hand limit<br><small><code>grading-method="equivalent"</code> (default)</small></td>
+                <td>$\displaystyle \lim_{x \to 0^+} \frac{\sin x}{x}$</td>
+                <td><pl-big-operator-input answers-name="limit" operator="limit" index-variable="x" limit-direction="from-right" allow-blank="true"></pl-big-operator-input></td>
+            </tr>
+        </tbody>
+    </table>
 </div>
-<div class="row">
-    <div class="col-md-6">
-        <p>Range integral:</p>
-        <pl-big-operator-input
-            answers-name="integral"
-            operator="integral"
-            index-variable="x"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-    <div class="col-md-6">
-        <p>Domain integral:</p>
-        <pl-big-operator-input
-            answers-name="contour"
-            operator="integral"
-            limits="domain"
-            index-variable="z"
-            variables="Gamma"
-            grading-method="exact"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-6">
-        <p>Minimum:</p>
-        <pl-big-operator-input
-            answers-name="min"
-            operator="min"
-            index-variable="x"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-    <div class="col-md-6">
-        <p>Maximum:</p>
-        <pl-big-operator-input
-            answers-name="max"
-            operator="max"
-            index-variable="x"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-6">
-        <p>Domain-indexed union:</p>
-        <pl-big-operator-input
-            answers-name="union"
-            operator="union"
-            index-variable="k"
-            grading-method="exact"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-    <div class="col-md-6">
-        <p>Domain-indexed intersection:</p>
-        <pl-big-operator-input
-            answers-name="intersection"
-            operator="intersection"
-            index-variable="k"
-            grading-method="exact"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-6">
-        <p>Domain-indexed conjunction:</p>
-        <pl-big-operator-input
-            answers-name="and"
-            operator="and"
-            index-variable="k"
-            grading-method="exact"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-    <div class="col-md-6">
-        <p>Domain-indexed disjunction:</p>
-        <pl-big-operator-input
-            answers-name="or"
-            operator="or"
-            index-variable="k"
-            grading-method="exact"
-            allow-blank="true"
-        ></pl-big-operator-input>
-    </div>
-</div>
-<p>Right-hand limit:</p>
-<pl-big-operator-input
-    answers-name="limit"
-    operator="limit"
-    index-variable="x"
-    limit-direction="from-right"
-    allow-blank="true"
-></pl-big-operator-input>

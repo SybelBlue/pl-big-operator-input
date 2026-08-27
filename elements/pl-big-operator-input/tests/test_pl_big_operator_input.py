@@ -338,11 +338,30 @@ def test_domain_fields_reject_non_sets_at_parse_time(operator):
 
 @pytest.mark.parametrize("operator", ["union", "intersection", "disjoint-union"])
 def test_set_combinator_bodies_reject_non_sets_at_parse_time(operator):
-    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k"})
+    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k + 1"})
     mod.parse(html(operator=operator), state)
 
     assert state["submitted_answers"]["op"] is None
     assert state["format_errors"]["op-body"] == "This field must be a set."
+
+
+def test_bare_variables_are_accepted_as_symbolic_sets():
+    integral = data(raw={"op-domain": "Gamma", "op-body": "z"})
+    integral_markup = html(
+        operator="integral",
+        limits="domain",
+        **{"index-variable": "z", "variables": "Gamma"},
+    )
+    mod.parse(integral_markup, integral)
+
+    union = data(raw={"op-domain": "I", "op-body": "A"})
+    union_markup = html(operator="union", variables="I,A")
+    mod.parse(union_markup, union)
+
+    assert integral["submitted_answers"]["op"] is not None
+    assert union["submitted_answers"]["op"] is not None
+    assert "format_errors" not in integral
+    assert "format_errors" not in union
 
 
 @pytest.mark.parametrize(

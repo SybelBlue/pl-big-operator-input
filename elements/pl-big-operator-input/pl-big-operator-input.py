@@ -500,6 +500,11 @@ def _requires_set(config: Config, component: Component) -> bool:
     )
 
 
+def _is_set_input(value: sympy.Basic) -> bool:
+    # A bare symbol may denote a set whose members are not known at parse time.
+    return isinstance(value, (sympy.Set, sympy.Symbol))
+
+
 def _blank(config: Config, data: dict[str, Any]) -> bool:
     raw = data.get("raw_submitted_answers", {})
     return all(not str(raw.get(config.name(c), "")).strip() for c in config.components)
@@ -523,7 +528,7 @@ def _parse_values(
             if not source.strip():
                 raise ValueError("No submitted answer.")
             value = _parse(source, variables)
-            if _requires_set(config, component) and not isinstance(value, sympy.Set):
+            if _requires_set(config, component) and not _is_set_input(value):
                 raise ValueError("This field must be a set.")
             result[component] = value
             submitted[name] = _json(value)
