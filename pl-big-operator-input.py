@@ -88,8 +88,9 @@ OPERATOR_SNAKECASE: dict[Operator, str] = {
 }
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
+type ResponseComponent = Literal["direction"] | Component
 type AllowedBlank = Literal["none", "limits", "body", "all"]
-COMPONENT_MAP: dict[LimitFormat, Sequence[Component]] = {
+COMPONENTS_MAP: dict[LimitFormat, Sequence[Component]] = {
     "bounds": ("lower", "upper", "body"),
     "domain": ("domain", "body"),
     "approach": ("target", "body"),
@@ -126,17 +127,14 @@ class Config:
     correct_components: tuple[tuple[Component, str], ...]
 
     @property
-    def components(self):
-        return COMPONENT_MAP[self.limits]
+    def components(self) -> Sequence[Component]:
+        return COMPONENTS_MAP[self.limits]
 
     @property
-    def response_components(self) -> tuple[str, ...]:
-        direction = (
-            ("direction",)
-            if self.limits == "approach" and self.allow_direction_input
-            else ()
-        )
-        return (*self.components, *direction)
+    def response_components(self) -> Sequence[ResponseComponent]:
+        if self.limits == "approach" and self.allow_direction_input:
+            return (*self.components, "direction")
+        return tuple(self.components)
 
     def name(self, component: str) -> str:
         return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
@@ -305,7 +303,7 @@ def _infer_spec(
             if (
                 raw.get("_version") == 1
                 and operator in {*OPS, "custom"}
-                and limits in COMPONENT_MAP
+                and limits in COMPONENTS_MAP
                 and index is not None
             ):
                 return operator, limits, index
@@ -486,7 +484,7 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         raise ValueError(
             'Attribute "allowed-blank" must be none, limits, body, or all.'
         )
-    components = COMPONENT_MAP[cast(LimitFormat, limits)]
+    components = COMPONENTS_MAP[cast(LimitFormat, limits)]
     irrelevant = set(supplied_components) - set(components)
     if irrelevant:
         attributes = ", ".join(
