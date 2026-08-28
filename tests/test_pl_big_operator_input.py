@@ -47,8 +47,6 @@ def data(correct=None, raw=None, panel="question"):
         ("union", "domain"),
         ("intersection", "domain"),
         ("disjoint-union", "domain"),
-        ("and", "domain"),
-        ("or", "domain"),
         ("min", "domain"),
         ("max", "domain"),
     ],
@@ -67,8 +65,6 @@ def test_auto_limits(operator, limits):
         "Union",
         "Intersection",
         "Disjoint-union",
-        "And",
-        "Or",
         "Min",
         "Max",
     ],
@@ -90,6 +86,20 @@ def test_operator_attribute_rejects_other_capitalization():
         mod._config(html(operator="SUM"))
 
 
+@pytest.mark.parametrize("operator", ["and", "or", "And", "Or"])
+def test_operator_attribute_rejects_boolean_operators(operator):
+    with pytest.raises(ValueError, match="Unknown operator"):
+        mod._config(html(operator=operator))
+
+
+@pytest.mark.parametrize("correct", ["And(k, (k, {1, 2}))", "Or(k, (k, {1, 2}))"])
+def test_whole_answers_do_not_infer_boolean_operators(correct):
+    markup = html(**{"correct-answer": correct})
+
+    with pytest.raises(ValueError, match='The "operator" attribute is required'):
+        mod.prepare(markup, data())
+
+
 @pytest.mark.parametrize(
     "operator,correct,limits",
     [
@@ -100,8 +110,6 @@ def test_operator_attribute_rejects_other_capitalization():
         ("union", "Union({k}, (k, {1, 2}))", "domain"),
         ("intersection", "Intersection({k}, (k, {1, 2}))", "domain"),
         ("disjoint-union", "DisjointUnion({k}, (k, {1, 2}))", "domain"),
-        ("and", "And(k, (k, {1, 2}))", "domain"),
-        ("or", "Or(k, (k, {1, 2}))", "domain"),
         ("min", "Min(k**2, (k, {1, 2}))", "domain"),
         ("max", "Max(k**2, (k, {1, 2}))", "domain"),
     ],
@@ -126,8 +134,6 @@ def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
         ("union", "Union"),
         ("intersection", "Intersection"),
         ("disjoint-union", "DisjointUnion"),
-        ("and", "And"),
-        ("or", "Or"),
         ("min", "Min"),
         ("max", "Max"),
         ("custom", "Custom"),
@@ -444,8 +450,6 @@ def test_inferred_builtin_operator_accepts_custom_latex():
         "union",
         "intersection",
         "disjoint-union",
-        "and",
-        "or",
         "min",
         "max",
     ],
@@ -538,8 +542,6 @@ def test_prepare_decodes_serialized_binders_without_interval_parsing(operator, c
         ("union", "Union", "{k}"),
         ("intersection", "Intersection", "{k}"),
         ("disjoint-union", "DisjointUnion", "{k}"),
-        ("and", "And", "k"),
-        ("or", "Or", "k"),
         ("min", "Min", "k**2"),
         ("max", "Max", "k**2"),
     ],
@@ -1064,7 +1066,7 @@ def test_min_max_answer_panel_never_renders_question_mark_fallback(operator):
 
 
 @pytest.mark.parametrize(
-    "operator", ["union", "intersection", "disjoint-union", "and", "or", "min", "max"]
+    "operator", ["union", "intersection", "disjoint-union", "min", "max"]
 )
 def test_variadic_operators_require_structured_answers(operator):
     with pytest.raises(TypeError, match="canonical structured"):
@@ -1098,9 +1100,7 @@ def test_parse_only_relevant_fields_and_allows_index_in_body():
     assert "op-start" not in state["submitted_answers"]
 
 
-@pytest.mark.parametrize(
-    "operator", ["sum", "product", "integral", "union", "and", "min"]
-)
+@pytest.mark.parametrize("operator", ["sum", "product", "integral", "union", "min"])
 def test_domain_fields_reject_non_sets_at_parse_time(operator):
     state = data(raw={"op-domain": "1", "op-body": "FiniteSet(k)"})
     mod.parse(html(operator=operator, limits="domain"), state)
@@ -1284,14 +1284,6 @@ def test_body_right_edge_is_rounded_only_when_it_has_no_trailing_control():
     assert ".pl-big-operator-input__body .input-group > math-field:last-child" in css
     assert "border-top-right-radius: var(--bs-border-radius) !important" in css
     assert "border-bottom-right-radius: var(--bs-border-radius) !important" in css
-
-
-def test_non_set_combinator_bodies_still_accept_expressions():
-    state = data(raw={"op-domain": "FiniteSet(1, 2)", "op-body": "k"})
-    mod.parse(html(operator="and"), state)
-
-    assert state["submitted_answers"]["op"] is not None
-    assert "format_errors" not in state
 
 
 def test_parse_does_not_add_render_or_grade_phase_data_keys():

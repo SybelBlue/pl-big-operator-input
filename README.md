@@ -57,7 +57,6 @@ when that inference fails or is unavailable.
 | Integral                           | $\int$                            | bounds                       | bounds, domain           |
 | Limit                              | $\lim$                            | approach                     | approach only            |
 | Union, Intersection, DisjointUnion | $\bigcup$, $\bigcap$, $\bigsqcup$ | domain                       | bounds, domain           |
-| And, Or                            | $\bigwedge$, $\bigvee$            | domain                       | bounds, domain           |
 | Min, Max                           | $\min$, $\max$                    | domain                       | bounds, domain           |
 | Custom                             | ---                               | inferred from a whole answer | bounds, domain, approach |
 
@@ -134,7 +133,7 @@ layouts; they do not define a new symbolic operation in SymPy. Consequently:
 When `operator` is omitted, a correct answer supplied as a string or
 JSON-safe dictionary identifies the built-in operator, index-string, and limits. Supported strings begin
 with `Sum`, `Product`, `Integral`, `Limit`, `Union`, `Intersection`,
-`DisjointUnion`, `And`, `Or`, `Min`, `Max`, or `Custom`. A canonical dictionary uses its
+`DisjointUnion`, `Min`, `Max`, or `Custom`. A canonical dictionary uses its
 `operator` field, while a PrairieLearn SymPy JSON dictionary can identify the
 formatted `Sum`, `Product`, `Integral`, and `Limit` expressions.
 In parseable whole answers, `(index, domain)` selects `limits="domain"`,
@@ -206,7 +205,7 @@ author conveniences and normalized during `prepare()`. Two-item integral
 tuples become domain forms and three-item tuples become bounds forms. Do not
 put raw SymPy objects in `data`, because PrairieLearn question data must remain
 JSON-serializable. Variadic SymPy `Union`, `Intersection`, `DisjointUnion`,
-`And`, `Or`, `Min`, and `Max` do not preserve an indexed whole-answer format and
+`Min`, and `Max` do not preserve an indexed whole-answer format and
 therefore are never accepted as substitutes for one.
 
 The variadic operators accept a parseable whole-answer syntax that preserves
@@ -221,8 +220,8 @@ second argument:
 ></pl-big-operator-input>
 ```
 
-The same form supports `Intersection`, `DisjointUnion`, `And`, `Or`, `Min`,
-and `Max`. These strings normalize to the canonical answer without evaluating
+The same form supports `Intersection`, `DisjointUnion`, `Min`, and `Max`.
+These strings normalize to the canonical answer without evaluating
 away the index and limits.
 
 ### Component attributes (alternative)

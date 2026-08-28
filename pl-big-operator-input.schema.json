@@ -15,8 +15,6 @@
         "union",
         "intersection",
         "disjoint-union",
-        "and",
-        "or",
         "min",
         "max",
         "custom"
@@ -105,7 +103,7 @@
     "correct-answer": {
       "description": "Complete correct answer as a supported parseable expression, including Custom(body, limits) when operator-latex is supplied; cannot be combined with component correct-answer attributes.",
       "type": "string",
-      "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max|Custom)\\s*\\(.+\\)\\s*$"
+      "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|Min|Max|Custom)\\s*\\(.+\\)\\s*$"
     },
     "correct-answer-start": {
       "description": "Correct lower-bound expression for the start field when using bounds limits.",
@@ -147,8 +145,6 @@
                 "union",
                 "intersection",
                 "disjoint-union",
-                "and",
-                "or",
                 "min",
                 "max"
               ]
