@@ -76,13 +76,17 @@
         </td>
       </tr>
       <tr>
-        <td colspan="2">Domain integral <small> <code>grading-method="component"</code></small></td>
+        <td colspan="2">
+          Contour integral using custom operator latex
+          <small> <code>grading-method="component" operator-latex="\oint"</code></small>
+        </td>
       </tr>
       <tr>
-        <td>$\displaystyle \int_{\Gamma} z\,dz$</td>
+        <td>$\displaystyle \oint_{\Gamma} z\,dz$</td>
         <td>
           <pl-big-operator-input
             answers-name="contour"
+            operator-latex="\oint"
             correct-answer="Integral(z, (z, Gamma))"
             variables="Gamma"
             grading-method="component"
