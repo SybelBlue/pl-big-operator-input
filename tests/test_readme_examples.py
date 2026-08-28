@@ -6,8 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-
-pytestmark = pytest.mark.smoke
+from helpers import SmokeTestSuite
 
 HERE = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -25,30 +24,30 @@ README_EXAMPLES = re.findall(
 )
 
 
-def test_readme_contains_markup_examples():
-    assert README_EXAMPLES
+class TestReadmeExamples(SmokeTestSuite):
+    def test_readme_contains_markup_examples(self):
+        assert README_EXAMPLES
 
+    @pytest.mark.parametrize("example", README_EXAMPLES)
+    def test_readme_markup_examples_validate_prepare_and_render(self, example):
+        elements = [
+            fragment
+            for fragment in mod.lxml.html.fragments_fromstring(example)
+            if getattr(fragment, "tag", None) == "pl-big-operator-input"
+        ]
+        assert len(elements) == 1
+        markup = mod.lxml.html.tostring(elements[0], encoding="unicode")
+        data = {
+            "params": {},
+            "correct_answers": {},
+            "raw_submitted_answers": {},
+            "panel": "question",
+        }
 
-@pytest.mark.parametrize("example", README_EXAMPLES)
-def test_readme_markup_examples_validate_prepare_and_render(example):
-    elements = [
-        fragment
-        for fragment in mod.lxml.html.fragments_fromstring(example)
-        if getattr(fragment, "tag", None) == "pl-big-operator-input"
-    ]
-    assert len(elements) == 1
-    markup = mod.lxml.html.tostring(elements[0], encoding="unicode")
-    data = {
-        "params": {},
-        "correct_answers": {},
-        "raw_submitted_answers": {},
-        "panel": "question",
-    }
+        mod.pl.validate_element(
+            elements[0],
+            HERE / "pl-big-operator-input.schema.json",
+        )
+        mod.prepare(markup, data)
 
-    mod.pl.validate_element(
-        elements[0],
-        HERE / "pl-big-operator-input.schema.json",
-    )
-    mod.prepare(markup, data)
-
-    assert mod.render(markup, data)
+        assert mod.render(markup, data)

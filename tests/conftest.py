@@ -5,15 +5,19 @@ from pathlib import Path
 
 import pytest
 
-
 pl_sum_input_root = Path(__file__).resolve().parents[1]
 if str(pl_sum_input_root) not in sys.path:
     sys.path.insert(0, str(pl_sum_input_root))
 
 
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Classify otherwise-unmarked project tests as focused unit tests."""
-    classifications = {"smoke", "regression", "browser"}
-    for item in items:
-        if not classifications.intersection(item.keywords):
-            item.add_marker(pytest.mark.unit)
+def pytest_configure(config: pytest.Config) -> None:
+    """Register local suite markers without publishing pytest configuration."""
+    markers = {
+        "smoke": "fast publication-critical lifecycle and documentation contracts",
+        "regression": "named bug or compatibility contract",
+        "unit": "focused project-owned unit and characterization tests",
+        "vendor_contract": "project adapter compatibility with the pinned PrairieLearn snapshot",
+        "browser": "DOM/CSS layout or accessibility behavior requiring a browser",
+    }
+    for name, description in markers.items():
+        config.addinivalue_line("markers", f"{name}: {description}")
