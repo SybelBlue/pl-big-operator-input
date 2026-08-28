@@ -877,7 +877,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
         direction_score = component_scores.get("direction")
         if config.allow_direction_input:
             context["direction_input"] = _direction_input(config, data, direction_score)
-        dir = (
+        direction_suffix = (
             None
             if config.allow_direction_input
             else {"two-sided": None, "from-left": "−", "from-right": "+"}[
@@ -891,7 +891,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             10,
             data,
             rf"\({index} \to \)",
-            dir and rf"\({{}}^{dir}\)",
+            rf"\({{}}^{direction_suffix}\)" if direction_suffix else None,
             score=component_scores.get("target"),
         )
     return chevron.render(
