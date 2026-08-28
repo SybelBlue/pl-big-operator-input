@@ -80,6 +80,16 @@
       "default": "true",
       "enum": ["true", "false"]
     },
+    "body-size": {
+      "description": "Positive character width of the body symbolic input.",
+      "type": "string",
+      "format": "integer"
+    },
+    "limit-size": {
+      "description": "Positive character width applied to every limit symbolic input. Defaults to 7 for bounds and 10 for domain or approach limits.",
+      "type": "string",
+      "format": "integer"
+    },
     "grading-method": {
       "description": "How the response is graded: exact compares canonical structure, component grades visible fields separately, and equivalent checks symbolic equivalence.",
       "default": "equivalent",

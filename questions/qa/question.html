@@ -35,7 +35,7 @@
         </td>
       </tr>
       <tr>
-        <td colspan="2">Domain sum <small> <code>grading-method="exact"</code></small></td>
+        <td colspan="2">Domain-indexed sum <small> <code>grading-method="exact"</code></small></td>
       </tr>
       <tr>
         <td>$\displaystyle \sum_{k\in N} \frac1{k^2}$</td>
@@ -82,13 +82,13 @@
         </td>
       </tr>
       <tr>
-        <td>$\displaystyle \oint_{\Gamma} z\,dz$</td>
+        <td>$\displaystyle \oint_{\gamma} \frac1z\,dz$</td>
         <td>
           <pl-big-operator-input
             answers-name="contour"
             operator-latex="\oint"
-            correct-answer="Integral(z, (z, Gamma))"
-            variables="Gamma"
+            correct-answer="Integral(1/z, (z, gamma))"
+            variables="gamma"
             grading-method="component"
             allowed-blank="all"
           ></pl-big-operator-input>
@@ -118,11 +118,11 @@
         <td colspan="2">Domain-indexed minimum <small></small></td>
       </tr>
       <tr>
-        <td>$\displaystyle \min_{x \in \{1,2\}} x^2$</td>
+        <td>$\displaystyle \min_{x \in \{-2, 1\}} x^2$</td>
         <td>
           <pl-big-operator-input
             answers-name="min"
-            correct-answer="Min(x**2, (x, {1, 2}))"
+            correct-answer="Min(x**2, (x, {-2, 1}))"
             allowed-blank="all"
           ></pl-big-operator-input>
         </td>
@@ -131,11 +131,11 @@
         <td colspan="2">Domain-indexed maximum <small></small></td>
       </tr>
       <tr>
-        <td>$\displaystyle \max_{x \in \{1,2\}} x^2$</td>
+        <td>$\displaystyle \max_{x \in \{-2, 1\}} x^2$</td>
         <td>
           <pl-big-operator-input
             answers-name="max"
-            correct-answer="Max(x**2, (x, {1, 2}))"
+            correct-answer="Max(x**2, (x, {-2, 1}))"
             allowed-blank="all"
           ></pl-big-operator-input>
         </td>
@@ -181,11 +181,11 @@
         </td>
       </tr>
       <tr>
-        <td>$\displaystyle \bigsqcup_{k \in \{1,2\}} \{k\}$</td>
+        <td>$\displaystyle \bigsqcup_{k \in \{1,2\}} \{k+1\}$</td>
         <td>
           <pl-big-operator-input
             answers-name="disjoint-union"
-            correct-answer="DisjointUnion({k}, (k, {1, 2}))"
+            correct-answer="DisjointUnion({k+1}, (k, {1, 2}))"
             grading-method="exact"
             allowed-blank="all"
           ></pl-big-operator-input>
