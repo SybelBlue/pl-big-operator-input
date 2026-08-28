@@ -109,6 +109,7 @@ class Config:
     variables: tuple[str, ...]
     custom_functions: tuple[str, ...]
     direction: str
+    allow_direction_input: bool
     allowed_blank: AllowedBlank
     allow_complex: bool
     show_help_text: bool
@@ -121,6 +122,15 @@ class Config:
     @property
     def components(self):
         return COMPONENT_MAP[self.limits]
+
+    @property
+    def response_components(self) -> tuple[str, ...]:
+        direction = (
+            ("direction",)
+            if self.limits == "approach" and self.allow_direction_input
+            else ()
+        )
+        return (*self.components, *direction)
 
     def name(self, component: str) -> str:
         return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
@@ -425,6 +435,14 @@ def _config(html: str, data: Any | None = None) -> Config:
     )
     if direction not in DIRECTIONS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
+    direction_input_attribute = "allow-limit-direction-input" in element.attrib
+    if direction_input_attribute and limits != "approach":
+        raise ValueError(
+            'Attribute "allow-limit-direction-input" can only be used with limits="approach".'
+        )
+    allow_direction_input = bool(
+        pl.get_boolean_attrib(element, "allow-limit-direction-input", True)
+    )
     variables = pl.get_string_attrib(element, "variables", "") or ""
     custom_functions = pl.get_string_attrib(element, "custom-functions", "") or ""
     allowed_blank = pl.get_string_attrib(element, "allowed-blank", "none") or "none"
@@ -472,6 +490,7 @@ def _config(html: str, data: Any | None = None) -> Config:
         tuple(x.strip() for x in variables.split(",") if x.strip()),
         tuple(x.strip() for x in custom_functions.split(",") if x.strip()),
         direction,
+        allow_direction_input,
         cast(AllowedBlank, allowed_blank),
         bool(pl.get_boolean_attrib(element, "allow-complex", False)),
         bool(pl.get_boolean_attrib(element, "show-help-text", True)),
@@ -516,7 +535,11 @@ def _json(value: sympy.Basic) -> dict[str, Any]:
     return cast(dict[str, Any], psu.sympy_to_json(cast(Any, value), allow_sets=True))
 
 
-def _canonical(config: Config, values: dict[str, sympy.Basic]) -> dict[str, Any]:
+def _canonical(
+    config: Config,
+    values: dict[str, sympy.Basic],
+    direction: str | None = None,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "_type": "operator_expression",
         "_version": 1,
@@ -528,7 +551,7 @@ def _canonical(config: Config, values: dict[str, sympy.Basic]) -> dict[str, Any]
         result["operator_latex"] = config.operator_latex
     result.update({key: _json(values[key]) for key in config.components})
     if config.limits == "approach":
-        result["direction"] = config.direction
+        result["direction"] = direction or config.direction
     return result
 
 
@@ -765,7 +788,7 @@ def _field(
     }
 
 
-def _component_scores(config: Config, data: pl.QuestionData) -> dict[Component, float]:
+def _component_scores(config: Config, data: pl.QuestionData) -> dict[str, float]:
     if config.grading != "component" or config.answer not in data.get(
         "partial_scores", {}
     ):
@@ -776,9 +799,36 @@ def _component_scores(config: Config, data: pl.QuestionData) -> dict[Component, 
         return {}
     submitted = _values(config, submitted_json)
     correct = _values(config, correct_json)
-    return {
+    scores = {
         component: float(submitted[component] == correct[component])
         for component in config.components
+    }
+    if config.limits == "approach" and config.allow_direction_input:
+        scores["direction"] = float(
+            submitted_json.get("direction") == correct_json.get("direction")
+        )
+    return scores
+
+
+def _direction_input(
+    config: Config, data: pl.QuestionData, score: float | None
+) -> dict[str, Any]:
+    name = config.name("direction")
+    raw_value = str(data.get("raw_submitted_answers", {}).get(name, ""))
+    has_error = name in data.get("format_errors", {})
+    return {
+        "name": name,
+        "invalid": has_error,
+        "feedback": data.get("format_errors", {}).get(name),
+        "options": [
+            {"value": value, "label": label, "selected": raw_value == value}
+            for value, label in (
+                ("two-sided", " "),
+                ("from-right", "+"),
+                ("from-left", "-"),
+            )
+        ],
+        "score_badge": _score_badge(score) if score is not None else None,
     }
 
 
@@ -826,7 +876,16 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             score=component_scores.get("domain"),
         )
     else:
-        dir = {"two-sided": None, "from-left": "−", "from-right": "+"}[config.direction]
+        direction_score = component_scores.get("direction")
+        if config.allow_direction_input:
+            context["direction_input"] = _direction_input(config, data, direction_score)
+        dir = (
+            None
+            if config.allow_direction_input
+            else {"two-sided": None, "from-left": "−", "from-right": "+"}[
+                config.direction
+            ]
+        )
         context["annotation_field"] = _field(
             config,
             "target",
@@ -858,15 +917,22 @@ def _tex(config: Config, raw: dict[str, Any] | None) -> str:
         if config.operator == "integral":
             return rf"{op}_{{{get('domain')}}} {get('body')}\,\mathrm{{d}}{index}"
         return rf"{op}_{{{index}\in {get('domain')}}} {get('body')}"
-    direction = {"two-sided": "", "from-left": "^-", "from-right": "^+"}[
-        config.direction
-    ]
+    direction_value = (
+        str(raw.get(config.name("direction"), ""))
+        if config.allow_direction_input
+        else config.direction
+    )
+    direction = {"two-sided": "", "from-left": "^-", "from-right": "^+"}.get(
+        direction_value, "^?"
+    )
     return rf"{op}_{{{index}\to {get('target')}{direction}}} {get('body')}"
 
 
 def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
     values = _values(config, structured)
     raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
+    if config.limits == "approach" and config.allow_direction_input:
+        raw[config.name("direction")] = structured.get("direction", "")
     return _tex(config, raw)
 
 
@@ -1009,23 +1075,38 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
     config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
     raw = data.get("raw_submitted_answers", {})
-    blank_components: list[Component] = [
+    blank_components = [
         component
-        for component in config.components
+        for component in config.response_components
         if not str(raw.get(config.name(component), "")).strip()
     ]
     if blank_components and all(
-        _component_allows_blank(config, component) for component in blank_components
+        _component_allows_blank(config, cast(Component, component))
+        for component in blank_components
     ):
         _parse_values(config, data)
         errors = data.get("format_errors", {})
         has_component_error = any(
-            config.name(component) in errors for component in config.components
+            config.name(component) in errors for component in config.response_components
         )
         submitted[config.answer] = None if has_component_error else ""
         return
     values = _parse_values(config, data)
-    submitted[config.answer] = _canonical(config, values) if values else None
+    direction = config.direction
+    if config.limits == "approach" and config.allow_direction_input:
+        direction_name = config.name("direction")
+        direction = str(raw.get(direction_name, "")).strip()
+        if direction not in DIRECTIONS:
+            data.setdefault("format_errors", {})[direction_name] = (
+                "Select a valid limit direction."
+            )
+            submitted[direction_name] = None
+            submitted[config.answer] = None
+            return
+        submitted[direction_name] = direction
+    submitted[config.answer] = (
+        _canonical(config, values, direction=direction) if values else None
+    )
 
 
 def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic]:
@@ -1034,7 +1115,9 @@ def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic
     }
 
 
-def _construct(config: Config, values: dict[str, sympy.Basic]) -> sympy.Basic:
+def _construct(
+    config: Config, values: dict[str, sympy.Basic], direction: str | None = None
+) -> sympy.Basic:
     index = sympy.Symbol(config.index)
     body = values["body"]
     if config.limits == "bounds":
@@ -1046,7 +1129,7 @@ def _construct(config: Config, values: dict[str, sympy.Basic]) -> sympy.Basic:
         return bound_constructor(body, (index, values["lower"], values["upper"]))
     if config.limits == "approach":
         return sympy.Limit(
-            body, index, values["target"], dir=DIRECTIONS[config.direction]
+            body, index, values["target"], dir=DIRECTIONS[direction or config.direction]
         )
     domain = values["domain"]
     if config.operator == "integral":
@@ -1069,9 +1152,14 @@ def _equivalent(
     config: Config,
     left_values: dict[str, sympy.Basic],
     right_values: dict[str, sympy.Basic],
+    left_direction: str | None = None,
+    right_direction: str | None = None,
 ) -> bool:
     try:
-        left, right = _construct(config, left_values), _construct(config, right_values)
+        left, right = (
+            _construct(config, left_values, left_direction),
+            _construct(config, right_values, right_direction),
+        )
         if left == right:
             return True
         left, right = left.doit(), right.doit()
@@ -1104,13 +1192,27 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
             weights = [
                 config.body_weight if c == "body" else 1 for c in config.components
             ]
-            score = sum(
+            earned = sum(
                 w
                 for c, w in zip(config.components, weights)
                 if submitted[c] == correct[c]
-            ) / sum(weights)
+            )
+            if config.limits == "approach" and config.allow_direction_input:
+                weights.append(1)
+                earned += int(
+                    submitted_json.get("direction") == correct_json.get("direction")
+                )
+            score = earned / sum(weights)
         else:
-            score = float(_equivalent(config, submitted, correct))
+            score = float(
+                _equivalent(
+                    config,
+                    submitted,
+                    correct,
+                    submitted_json.get("direction"),
+                    correct_json.get("direction"),
+                )
+            )
     data.setdefault("partial_scores", {})[config.answer] = {
         "score": score,
         "weight": config.weight,

@@ -57,6 +57,11 @@
         "from-right"
       ]
     },
+    "allow-limit-direction-input": {
+      "description": "Whether students select the limit direction for approach limits. When false, the configured correct direction is displayed as fixed notation.",
+      "default": "true",
+      "enum": ["true", "false"]
+    },
     "allowed-blank": {
       "description": "Which portions of the response may be blank: none, limits, body, or all.",
       "default": "none",
