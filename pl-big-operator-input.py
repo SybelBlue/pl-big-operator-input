@@ -823,9 +823,9 @@ def _direction_input(
         "options": [
             {"value": value, "label": label, "selected": raw_value == value}
             for value, label in (
-                ("two-sided", " "),
+                ("two-sided", "±"),
                 ("from-right", "+"),
-                ("from-left", "-"),
+                ("from-left", "−"),
             )
         ],
         "score_badge": _score_badge(score) if score is not None else None,
@@ -1085,6 +1085,10 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
         for component in blank_components
     ):
         _parse_values(config, data)
+        if "direction" in blank_components:
+            direction_name = config.name("direction")
+            submitted[direction_name] = ""
+            data.get("format_errors", {}).pop(direction_name, None)
         errors = data.get("format_errors", {})
         has_component_error = any(
             config.name(component) in errors for component in config.response_components
@@ -1104,6 +1108,7 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
             submitted[config.answer] = None
             return
         submitted[direction_name] = direction
+        data.get("format_errors", {}).pop(direction_name, None)
     submitted[config.answer] = (
         _canonical(config, values, direction=direction) if values else None
     )
