@@ -591,11 +591,248 @@ def test_limit_directions(direction, sympy_direction):
     )
     assert 'name="op-target"' in rendered and 'name="op-body"' in rendered
     assert "Approach target" in rendered and "Operator body" in rendered
-    if direction == "two-sided":
-        assert "pl-big-operator-input__suffix" not in rendered
-    else:
-        assert 'id="pl-symbolic-input-' in rendered and '-suffix"' in rendered
-        assert ("−" if direction == "from-left" else "+") in rendered
+    assert 'name="op-direction"' in rendered
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    options = tree.xpath('//select[@name="op-direction"]/option')
+    assert [(option.get("value"), option.text) for option in options] == [
+        ("", "?"),
+        ("two-sided", "±"),
+        ("from-right", "+"),
+        ("from-left", "−"),
+    ]
+    assert "pl-big-operator-input__suffix" not in rendered
+
+
+def test_limit_direction_input_defaults_true_and_can_be_disabled():
+    enabled = mod._config(html(operator="limit"))
+    disabled_markup = html(
+        operator="limit",
+        **{
+            "limit-direction": "from-left",
+            "allow-limit-direction-input": "false",
+        },
+    )
+
+    assert enabled.allow_direction_input is True
+    assert mod._config(disabled_markup).allow_direction_input is False
+    rendered = mod.render(disabled_markup, data())
+    assert 'name="op-direction"' not in rendered
+    assert '-suffix"' in rendered
+    assert "−" in rendered
+
+
+@pytest.mark.parametrize("value", ["true", "false"])
+def test_limit_direction_input_schema_values_are_valid(value):
+    markup = html(operator="limit", **{"allow-limit-direction-input": value})
+    mod.pl.validate_element(
+        mod.lxml.html.fragment_fromstring(markup),
+        HERE / "pl-big-operator-input.schema.json",
+    )
+    assert mod._config(markup).allow_direction_input is (value == "true")
+
+
+def test_limit_direction_input_rejects_invalid_boolean():
+    markup = html(operator="limit", **{"allow-limit-direction-input": "sometimes"})
+    with pytest.raises(ValueError):
+        mod.pl.validate_element(
+            mod.lxml.html.fragment_fromstring(markup),
+            HERE / "pl-big-operator-input.schema.json",
+        )
+    with pytest.raises(ValueError):
+        mod._config(markup)
+
+
+def test_limit_direction_input_rejects_non_approach_form():
+    with pytest.raises(ValueError, match="can only be used"):
+        mod._config(html(operator="sum", **{"allow-limit-direction-input": "false"}))
+
+
+def test_limit_direction_input_preserves_raw_selection():
+    rendered = mod.render(
+        html(operator="limit"), data(raw={"op-direction": "from-right"})
+    )
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    selected = tree.xpath('//select[@name="op-direction"]/option[@selected]')
+    assert [option.get("value") for option in selected] == ["from-right"]
+
+
+def test_limit_direction_input_two_sided_option_has_accessible_text():
+    rendered = mod.render(html(operator="limit"), data())
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    options = tree.xpath('//select[@name="op-direction"]/option[@value="two-sided"]')
+
+    assert len(options) == 1
+    assert options[0].text_content().strip() == "±"
+
+
+def test_limit_direction_input_is_a_red_single_character_monospace_control():
+    css = (HERE / "pl-big-operator-input.css").read_text()
+    assert "width: 1ch" in css
+    assert "font-family: ui-monospace" in css
+    assert "color: var(--bs-danger)" in css
+    assert "background-image: none" in css
+
+
+@pytest.mark.parametrize("direction", ["two-sided", "from-left", "from-right"])
+def test_limit_direction_input_parses_into_canonical_answer(direction):
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": direction,
+        }
+    )
+    mod.parse(html(operator="limit"), state)
+    assert state["submitted_answers"]["op"]["direction"] == direction
+    assert state["submitted_answers"]["op-direction"] == direction
+
+
+@pytest.mark.parametrize("direction", ["", "sideways"])
+def test_limit_direction_input_rejects_missing_or_invalid_selection(direction):
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": direction,
+        }
+    )
+    mod.parse(html(operator="limit"), state)
+    assert state["submitted_answers"]["op"] is None
+    assert state["format_errors"]["op-direction"] == "Select a valid limit direction."
+    rendered = mod.render(html(operator="limit"), state)
+    assert "is-invalid" in rendered
+    assert "Select a valid limit direction." in rendered
+
+
+def test_limit_direction_input_clears_stale_format_error_after_valid_selection():
+    markup = html(operator="limit")
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "sideways",
+        }
+    )
+    mod.parse(markup, state)
+    assert "op-direction" in state["format_errors"]
+
+    state["raw_submitted_answers"]["op-direction"] = "from-right"
+    mod.parse(markup, state)
+
+    assert "op-direction" not in state.get("format_errors", {})
+    assert "is-invalid" not in mod.render(markup, state)
+
+
+def test_limit_direction_input_honors_allowed_blank_limits():
+    state = data(raw={"op-target": "0", "op-body": "1/k", "op-direction": ""})
+    mod.parse(html(operator="limit", **{"allowed-blank": "limits"}), state)
+    assert state["submitted_answers"]["op"] == ""
+    assert "op-direction" not in state.get("format_errors", {})
+
+
+def test_limit_direction_input_clears_stale_submission_when_blank_is_allowed():
+    markup = html(operator="limit", **{"allowed-blank": "limits"})
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "from-right",
+        }
+    )
+    mod.parse(markup, state)
+    assert state["submitted_answers"]["op-direction"] == "from-right"
+
+    state["raw_submitted_answers"]["op-direction"] = ""
+    mod.parse(markup, state)
+
+    assert state["submitted_answers"]["op"] == ""
+    assert state["submitted_answers"]["op-direction"] == ""
+
+
+def test_fixed_limit_direction_is_injected_without_raw_field():
+    markup = html(
+        operator="limit",
+        **{
+            "limit-direction": "from-left",
+            "allow-limit-direction-input": "false",
+        },
+    )
+    state = data(raw={"op-target": "0", "op-body": "1/k"})
+    mod.parse(markup, state)
+    assert state["submitted_answers"]["op"]["direction"] == "from-left"
+    assert "op-direction" not in state["submitted_answers"]
+
+
+@pytest.mark.parametrize(
+    "grading,submitted_direction,expected",
+    [
+        ("exact", "from-right", 1.0),
+        ("exact", "from-left", 0.0),
+        ("component", "from-right", 1.0),
+        ("component", "from-left", 0.8),
+        ("equivalent", "from-right", 1.0),
+        ("equivalent", "from-left", 0.0),
+    ],
+)
+def test_student_limit_direction_participates_in_grading(
+    grading, submitted_direction, expected
+):
+    markup = html(
+        **{
+            "correct-answer": "Limit(1/k, (k, 0, '+'))",
+            "grading-method": grading,
+        }
+    )
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": submitted_direction,
+        }
+    )
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    assert state["partial_scores"]["op"]["score"] == pytest.approx(expected)
+
+
+def test_direction_component_feedback_is_rendered():
+    markup = html(
+        **{
+            "correct-answer": "Limit(1/k, (k, 0, '+'))",
+            "grading-method": "component",
+        }
+    )
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "from-left",
+        }
+    )
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    rendered = mod.render(markup, state)
+    assert 'name="op-direction"' in rendered
+    assert "0%" in rendered
+
+
+def test_submission_and_answer_panels_use_their_own_limit_directions():
+    markup = html(**{"correct-answer": "Limit(1/k, (k, 0, '+'))"})
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "from-left",
+        }
+    )
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    state["panel"] = "submission"
+    assert r"0^-" in mod.render(markup, state)
+    state["panel"] = "answer"
+    assert r"0^+" in mod.render(markup, state)
 
 
 def canonical(operator="union", limits="domain"):

@@ -33,6 +33,7 @@ inconvenient.
 | `index-variable`                                                                                                      | ☑️        | required if not inferred | Bound symbol; automatically allowed in the body.                                                                     |
 | `limits`                                                                                                              | ☑️        | `auto`                   | `bounds`, `domain`, or `approach`; `auto` uses the table below only when the value cannot be inferred.               |
 | `limit-direction`                                                                                                     | ☑️        | `two-sided`              | `two-sided`, `from-left`, or `from-right` for limits.                                                                |
+| `allow-limit-direction-input`                                                                                         |           | `true`                   | Let students select the direction for approach limits; set to `false` to display the configured direction as fixed.  |
 | `variables`                                                                                                           |           | `""`                     | Comma-separated extra allowed symbols beyond the index variable, e.g. `"Gamma,k,N"`.                                 |
 | `custom-functions`                                                                                                    |           | `""`                     | Comma-separated symbolic function names allowed in correct answers and student input, e.g. `"f,g"`.                  |
 | `operator-latex`                                                                                                      |           | ---                      | Operator display LaTeX. It can override a built-in operator's symbol.                                                |
@@ -65,6 +66,12 @@ when that inference fails or is unavailable.
 Lastly, `approach` forms colect a target bound and a body.
 The element displays and parses only the inputs required by the selected form.
 
+Approach forms show a required limit-direction selector by default. Its red `?`
+prompt requires the student to deliberately choose `±` (two-sided), `−`
+(from-left), or `+` (from-right); it never reveals the correct direction. Set
+`allow-limit-direction-input="false"` to render `limit-direction` as fixed
+notation instead. The attribute is invalid on non-approach forms.
+
 ### Custom Operators
 
 Here are some examples of the custom operator in use:
@@ -90,6 +97,16 @@ Here are some examples of the custom operator in use:
   limit-direction="two-sided"
   correct-answer-body="f(x)"
   grading-method="component"
+></pl-big-operator-input>
+```
+
+To supply the sidedness instead of asking the student for it:
+
+```xml
+<pl-big-operator-input
+  answers-name="right-limit"
+  correct-answer="Limit(1/x, (x, 0, '+'))"
+  allow-limit-direction-input="false"
 ></pl-big-operator-input>
 ```
 
@@ -146,8 +163,10 @@ A domain integral can therefore omit both the operator and limits attributes:
 A limit uses the parseable form `Limit(body, (index, target, direction))`.
 Valid direction strings are `"+"` (from the right), `"-"` (from the left), and
 `"+-"` (two-sided). When `limit-direction` is omitted, it is inferred from this
-value; an explicit attribute must agree. For example, the operator, approach
-layout, and two-sided direction are all inferred here:
+value; an explicit attribute must agree. This remains the correct direction
+whether it is student-entered or fixed. For example, the operator, approach
+layout, and two-sided direction are inferred here, while the student selects
+the direction from an initially unanswered `?` control:
 
 ```html
 <pl-big-operator-input
@@ -254,16 +273,17 @@ Every prepared or parsed answer is a flat version 1 dictionary. Mathematical lea
 
 - Range answers use `lower` and `upper`, as seen above.
 - Domain answers replace `lower` and `upper` with `domain`.
-- Approach answers use `target`, `direction`, and `body`. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
+- Approach answers use `target`, `direction`, and `body`. When direction input is enabled, the raw selection is stored as `<answers-name>-direction` and copied into canonical `direction`; when disabled, the configured direction is inserted directly. The outer `_type` is intentionally distinct from PrairieLearn's reserved `sympy` leaf type.
 - Custom submissions use the same form-dependent components and add `"operator_latex"`; built-in answers do not include that key.
 
 ## Grading
 
-`exact` requires an identical canonical operator, form, direction, index, and exact SymPy components. `component` compares visible components independently. `equivalent` constructs formatted Sum, Product, Integral, or Limit expressions where possible. Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly. Bounded variadic expressions cannot be represented faithfully in SymPy and are likewise reported as unsupported for equivalent grading; use `exact` or `component` for those forms.
+`exact` requires an identical canonical operator, form, direction, index, and exact SymPy components. `component` compares visible components independently; a student-entered direction has weight 1, like each other limit component. `equivalent` constructs formatted Sum, Product, Integral, or Limit expressions where possible, using each answer's own direction. Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly. Bounded variadic expressions cannot be represented faithfully in SymPy and are likewise reported as unsupported for equivalent grading; use `exact` or `component` for those forms.
 
 If no correct answer is supplied through an attribute or
 `data["correct_answers"]`, the element is ungraded. It still parses and stores
 the combined canonical response, but it does not create a partial score.
 Submission panels display the response without a score badge, and answer panels
 render nothing. Blank-response validation remains controlled separately by
-`allowed-blank`.
+`allowed-blank`. A student-entered direction counts as part of the limits, so
+`allowed-blank="limits"` and `allowed-blank="all"` permit its unanswered value.
