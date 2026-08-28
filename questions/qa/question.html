@@ -112,6 +112,28 @@
         </td>
       </tr>
       <tr class="table-secondary">
+        <th colspan="2" scope="colgroup">Recursive operators</th>
+      </tr>
+      <tr>
+        <td colspan="2">
+          Additivity over a partition <small>outer index used in the inner bounds</small>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          $\displaystyle \sum_{i=1}^{n}\int_{p_{i-1}}^{p_i} f(t)\,dt$
+        </td>
+        <td>
+          <pl-big-operator-input
+            answers-name="partitioned-integral"
+            correct-answer="Sum(Integral(f(t), (t, p(i - 1), p(i))), (i, 1, n))"
+            variables="n"
+            custom-functions="f,p"
+            allowed-blank="all"
+          ></pl-big-operator-input>
+        </td>
+      </tr>
+      <tr class="table-secondary">
         <th colspan="2" scope="colgroup">Suprema</th>
       </tr>
       <tr>

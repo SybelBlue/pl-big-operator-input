@@ -101,7 +101,7 @@
       "type": "integer"
     },
     "correct-answer": {
-      "description": "Complete correct answer as a supported parseable expression, including Custom(body, limits) when operator-latex is supplied; cannot be combined with component correct-answer attributes.",
+      "description": "Complete correct answer as a supported parseable expression, including Custom(body, limits) when operator-latex is supplied. Explicitly nested built-in calls generate a fixed recursive expanded-body UI. Cannot be combined with component correct-answer attributes.",
       "type": "string",
       "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|Min|Max|Custom)\\s*\\(.+\\)\\s*$"
     },

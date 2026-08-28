@@ -58,7 +58,9 @@
     </div>
   {{/integral}}
   {{#body_field}}
-    <div class="pl-big-operator-input__body">
+    <div
+      class="pl-big-operator-input__body{{#recursive_body}} pl-big-operator-input__body--recursive{{/recursive_body}}"
+    >
       <span class="visually-hidden">{{ label }}</span>{{> body-math-field }}
     </div>
   {{/body_field}}

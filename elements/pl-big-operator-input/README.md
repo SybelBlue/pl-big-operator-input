@@ -200,6 +200,42 @@ The variadic operators accept a parseable whole-answer syntax that preserves the
 The same form supports `Intersection`, `DisjointUnion`, `Min`, and `Max`.
 These strings normalize to the canonical answer without evaluating away the index and limits.
 
+### Recursive expanded bodies
+
+An explicitly nested built-in whole answer replaces an operator's body field with
+another expanded operator input. The nesting fixes the student-visible operator tree:
+
+```html
+<pl-big-operator-input
+  answers-name="nested-sum"
+  correct-answer="Sum(Product(i*j, (j, 1, i)), (i, 1, n))"
+  variables="n"
+></pl-big-operator-input>
+```
+
+This renders editable fields for the outer sum, the inner product, and the terminal
+`i*j` body. Hierarchical raw answer names preserve the nesting, for example
+`nested-sum-start`, `nested-sum-body-start`, and `nested-sum-body-body`.
+
+Recursive notation has the following rules:
+
+- Only explicit nesting is expanded. Multi-binder shorthand such as
+  `Sum(f, (i, ...), (j, ...))` remains unsupported.
+- Every recursive node must be a built-in operator. Custom operators cannot occur in
+  a recursive tree.
+- Outer indices are available in descendant limits and bodies. A child index is local
+  to its subtree, and an active index name cannot be reused.
+- Trees may contain at most eight operator nodes.
+- `allowed-blank` applies across the tree: `limits` covers all limit and direction
+  fields, `body` covers only the terminal body, and `all` covers both.
+- Component correct-answer attributes remain available only for flat questions;
+  recursive questions require a whole correct answer.
+
+Recursive submissions use canonical version 2 nodes. Each node contains the same
+operator metadata and limit components as version 1, while `body` contains either a
+nested version 2 node or the terminal SymPy JSON value. Flat questions continue to
+use version 1 without changing their answer or raw-field formats.
+
 ### Component attributes (alternative)
 
 Authors may instead provide each visible component as an attribute.
@@ -262,6 +298,8 @@ There are three grading modes:
 - `equivalent` constructs formal sympy expressions and tests their equivalence, first by structural equality then using `a - b =? 0`.
   - Domain equivalence expands only a concrete `FiniteSet`; symbolic or infinite domains fail explicitly rather than being expanded eagerly.
 - `component` checks corresponding visible components using the `equivalent`.
+  For recursive answers, every visible limit/direction field is a component and only
+  the terminal body receives `body-relative-weight`.
 
 If no correct answer is supplied through an attribute or `data["correct_answers"]`, the element is ungraded.
 It still parses and stores the combined canonical response, but it does not create a partial score.

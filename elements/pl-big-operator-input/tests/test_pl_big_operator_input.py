@@ -1294,9 +1294,12 @@ def test_body_help_text_can_be_disabled():
 def test_body_right_edge_is_rounded_only_when_it_has_no_trailing_control():
     css = (HERE / "pl-big-operator-input.css").read_text()
 
-    assert ".pl-big-operator-input__body math-field {" in css
+    assert ".pl-big-operator-input__body > .d-inline-block math-field {" in css
     assert "border-radius: var(--bs-border-radius) !important" not in css
-    assert ".pl-big-operator-input__body .input-group > math-field:last-child" in css
+    assert (
+        ".pl-big-operator-input__body > .d-inline-block .input-group > math-field:last-child"
+        in css
+    )
     assert "border-top-right-radius: var(--bs-border-radius) !important" in css
     assert "border-bottom-right-radius: var(--bs-border-radius) !important" in css
 
@@ -1894,4 +1897,229 @@ def test_annotated_operator_stack_has_vertical_offset(operator):
     assert (
         ".pl-big-operator-input__annotation math-field::part(virtual-keyboard-toggle)"
         in css
+    )
+
+
+def recursive_sum_markup(**attrs):
+    return html(
+        **{
+            "index-variable": None,
+            "variables": "n",
+            "correct-answer": "Sum(Product(k*j, (j, 1, k)), (k, 1, n))",
+            **attrs,
+        }
+    )
+
+
+def recursive_sum_raw(**changes):
+    values = {
+        "op-start": "1",
+        "op-end": "n",
+        "op-body-start": "1",
+        "op-body-end": "k",
+        "op-body-body": "k*j",
+    }
+    values.update(changes)
+    return values
+
+
+def test_recursive_answer_prepares_version_2_tree_and_renders_expanded_body():
+    markup = recursive_sum_markup()
+    state = data()
+
+    mod.prepare(markup, state)
+    answer = state["correct_answers"]["op"]
+    rendered = mod.render(markup, state)
+
+    assert answer["_version"] == 2
+    assert answer["operator"] == "sum"
+    assert answer["body"]["operator"] == "product"
+    assert answer["body"]["body"]["_type"] == "sympy"
+    assert 'name="op-body-start"' in rendered
+    assert 'name="op-body-end"' in rendered
+    assert 'name="op-body-body"' in rendered
+    assert 'name="op-body"' not in rendered
+    assert rendered.count("pl-big-operator-input flex-nowrap") == 2
+
+
+@pytest.mark.parametrize("grading", ["exact", "equivalent"])
+def test_recursive_exact_and_equivalent_grading(grading):
+    markup = recursive_sum_markup(**{"grading-method": grading})
+    state = data(raw=recursive_sum_raw())
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["submitted_answers"]["op"]["_version"] == 2
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
+def test_recursive_component_grading_scores_visible_fields_and_terminal_body():
+    markup = recursive_sum_markup(
+        **{"grading-method": "component", "body-relative-weight": "2"}
+    )
+    state = data(raw=recursive_sum_raw(**{"op-body-end": "k + 1"}))
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    rendered = mod.render(markup, state)
+
+    assert state["partial_scores"]["op"]["score"] == pytest.approx(5 / 6)
+    assert rendered.count("fa-check") == 4
+    assert rendered.count("fa-times") == 1
+
+
+def test_recursive_outer_index_is_available_in_descendant_limits_and_body():
+    markup = recursive_sum_markup()
+    state = data(raw=recursive_sum_raw())
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+
+    assert not state.get("format_errors")
+    submitted = state["submitted_answers"]["op"]
+    assert mod._decode(submitted["body"]["upper"]) == sympy.Symbol("k")
+
+
+def test_recursive_inner_index_is_not_available_in_outer_limits():
+    markup = recursive_sum_markup()
+    state = data(raw=recursive_sum_raw(**{"op-end": "j"}))
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+
+    assert "op-end" in state["format_errors"]
+    assert state["submitted_answers"]["op"] is None
+
+
+def test_recursive_submission_and_answer_panels_render_complete_notation():
+    markup = recursive_sum_markup()
+    state = data(raw=recursive_sum_raw())
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+
+    state["panel"] = "submission"
+    assert r"\sum_{k=1}^{n} \prod_{j=1}^{k} k*j" in mod.render(markup, state)
+    state["panel"] = "answer"
+    assert r"\sum_{k=1}^{n} \prod_{j=1}^{k} j k" in mod.render(markup, state)
+
+
+def test_recursive_blank_policy_applies_to_descendant_limits_and_terminal_body():
+    markup = recursive_sum_markup(**{"allowed-blank": "all"})
+    raw = recursive_sum_raw(**{"op-body-end": "", "op-body-body": ""})
+    state = data(raw=raw)
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+
+    assert not state.get("format_errors")
+    assert state["submitted_answers"]["op"] == ""
+    assert state["submitted_answers"]["op-body-end"] == ""
+    assert state["submitted_answers"]["op-body-body"] == ""
+
+
+@pytest.mark.parametrize(
+    ("correct", "message"),
+    [
+        ("Sum(Custom(k, (j, 1, k)), (k, 1, n))", "Custom operators"),
+        ("Sum(Sum(k, (k, 1, n)), (k, 1, n))", "already active"),
+        ("Sum(k, (k, 1, n), (j, 1, n))", "exactly one .*limits tuple"),
+    ],
+)
+def test_recursive_author_errors_are_rejected(correct, message):
+    markup = html(
+        **{
+            "index-variable": "k" if ", (j, 1, n)" in correct else None,
+            "operator": "sum" if ", (j, 1, n)" in correct else None,
+            "variables": "n",
+            "correct-answer": correct,
+        }
+    )
+    with pytest.raises(ValueError, match=message):
+        mod.prepare(markup, data())
+
+
+def test_recursive_depth_is_limited_to_eight_operator_nodes():
+    source = "k"
+    for position in range(9):
+        source = f"Sum({source}, (i{position}, 1, n))"
+    markup = html(
+        **{
+            "index-variable": None,
+            "variables": "n",
+            "correct-answer": source,
+        }
+    )
+
+    with pytest.raises(ValueError, match="maximum depth of 8"):
+        mod.prepare(markup, data())
+
+
+def test_recursive_domain_node_and_dependent_body_grade_equivalently():
+    markup = html(
+        **{
+            "index-variable": None,
+            "variables": "n",
+            "correct-answer": "Sum(Max(k+j, (j, {1, 2})), (k, 1, n))",
+        }
+    )
+    state = data(
+        raw={
+            "op-start": "1",
+            "op-end": "n",
+            "op-body-domain": "{2, 1}",
+            "op-body-body": "j + k",
+        }
+    )
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
+def test_recursive_approach_node_has_its_own_direction_field():
+    markup = html(
+        **{
+            "index-variable": None,
+            "variables": "n",
+            "correct-answer": "Sum(Limit(k+x, (x, 0, '+')), (k, 1, n))",
+            "grading-method": "component",
+        }
+    )
+    state = data(
+        raw={
+            "op-start": "1",
+            "op-end": "n",
+            "op-body-target": "0",
+            "op-body-direction": "from-right",
+            "op-body-body": "x + k",
+        }
+    )
+
+    mod.prepare(markup, state)
+    rendered = mod.render(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert 'name="op-body-direction"' in rendered
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
+def test_recursive_integral_tex_uses_inner_then_outer_differentials():
+    markup = html(
+        **{
+            "index-variable": None,
+            "correct-answer": "Integral(Integral(x*y, (y, 0, x)), (x, 0, 1))",
+        }
+    )
+    state = data(panel="answer")
+
+    mod.prepare(markup, state)
+
+    assert r"\int_{0}^{1} \int_{0}^{x} x y\,\mathrm{d}y\,\mathrm{d}x" in mod.render(
+        markup, state
     )

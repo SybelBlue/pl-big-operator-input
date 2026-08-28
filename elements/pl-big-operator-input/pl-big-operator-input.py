@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -97,6 +97,7 @@ CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
     "target": "correct-answer-target",
     "body": "correct-answer-body",
 }
+MAX_RECURSIVE_DEPTH = 8
 
 
 @dataclass(frozen=True)
@@ -275,7 +276,7 @@ def _infer_spec(
             except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
                 index = None
             if (
-                raw.get("_version") == 1
+                raw.get("_version") in {1, 2}
                 and operator in {*OPS, "custom"}
                 and limits in COMPONENT_MAP
                 and index is not None
@@ -539,6 +540,258 @@ def _json(value: sympy.Basic) -> dict[str, Any]:
     return cast(dict[str, Any], psu.sympy_to_json(cast(Any, value), allow_sets=True))
 
 
+def _is_recursive(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("_type") == "operator_expression"
+        and value.get("_version") == 2
+    )
+
+
+def _formatted_operator(source: str) -> Operator | None:
+    match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_-]*)\s*\(", source)
+    if match is None:
+        return None
+    return next(
+        (
+            operator
+            for operator, function_name in OPERATOR_SNAKECASE.items()
+            if function_name == match.group(1)
+        ),
+        None,
+    )
+
+
+def _recursive_node(
+    root: Config,
+    source: str,
+    outer_variables: tuple[str, ...],
+    active_indices: tuple[str, ...] = (),
+    depth: int = 1,
+) -> dict[str, Any]:
+    """Parse one explicitly nested formatted built-in operator node."""
+    if depth > MAX_RECURSIVE_DEPTH:
+        raise ValueError(
+            f"Recursive operator answer exceeds the maximum depth of {MAX_RECURSIVE_DEPTH} at body depth {depth}."
+        )
+    operator = _formatted_operator(source)
+    path = "body." * (depth - 1) + "operator"
+    if operator is None:
+        raise ValueError(f"Invalid recursive operator at {path}.")
+    if operator == "custom":
+        raise ValueError(f"Custom operators are not allowed recursively at {path}.")
+    formatted = _formatted_call(source, OPERATOR_SNAKECASE[operator])
+    if formatted is None:
+        raise ValueError(
+            f"Recursive operator at {path} must have a body and exactly one limits tuple."
+        )
+    body_source, binder = formatted
+    direction_symbol = _formatted_direction(binder)
+    if operator == "limit":
+        limits: LimitFormat = "approach"
+        if len(binder) != 3 or direction_symbol is None:
+            raise ValueError(f"Limit at {path} requires (index, target, direction).")
+    elif len(binder) == 2:
+        limits = "domain"
+    elif len(binder) == 3 and direction_symbol is None:
+        limits = "bounds"
+    else:
+        raise ValueError(
+            f"Recursive operator at {path} requires one 2-item domain or 3-item bounds tuple."
+        )
+    allowed = {"bounds", "domain"} if operator in FLEXIBLE else {OPS[operator][1]}
+    if limits not in allowed:
+        raise ValueError(
+            f'Operator "{operator}" does not support limits="{limits}" at {path}.'
+        )
+    try:
+        index_value = sympy.sympify(binder[0])
+    except (sympy.SympifyError, TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid recursive index at {path}.") from exc
+    index = _symbol_name(index_value)
+    if index is None:
+        raise TypeError(f"Recursive index at {path} must be a symbol.")
+    if index in active_indices:
+        raise ValueError(f'Recursive index "{index}" is already active at {path}.')
+    parse_variables = tuple(dict.fromkeys((*outer_variables, *active_indices)))
+    node: dict[str, Any] = {
+        "_type": "operator_expression",
+        "_version": 2,
+        "operator": operator,
+        "limits": limits,
+        "index": _json(sympy.Symbol(index)),
+    }
+    try:
+        if limits == "bounds":
+            node["lower"] = _json(
+                _parse(binder[1], parse_variables, root.custom_functions)
+            )
+            node["upper"] = _json(
+                _parse(binder[2], parse_variables, root.custom_functions)
+            )
+        elif limits == "domain":
+            domain = _parse(binder[1], parse_variables, root.custom_functions)
+            if not _is_set_input(domain):
+                raise ValueError("domain must be a set")
+            node["domain"] = _json(domain)
+        else:
+            node["target"] = _json(
+                _parse(binder[1], parse_variables, root.custom_functions)
+            )
+            public_direction = DIRECTION_NAMES.get(
+                cast(DirectionSymbol, direction_symbol)
+            )
+            if public_direction is None:
+                raise ValueError("invalid limit direction")
+            node["direction"] = public_direction
+    except Exception as exc:
+        raise ValueError(f"Invalid recursive limits at {path}.") from exc
+    child_operator = _formatted_operator(body_source)
+    child_variables = tuple(dict.fromkeys((*parse_variables, index)))
+    if child_operator is not None:
+        node["body"] = _recursive_node(
+            root, body_source, outer_variables, (*active_indices, index), depth + 1
+        )
+    else:
+        try:
+            body = _parse(body_source, child_variables, root.custom_functions)
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid terminal body at {'body.' * depth}value."
+            ) from exc
+        if operator in {
+            "union",
+            "intersection",
+            "disjoint-union",
+        } and not _is_set_input(body):
+            raise ValueError(f"Terminal body at {'body.' * depth}value must be a set.")
+        node["body"] = _json(body)
+    return node
+
+
+def _validated_recursive_node(
+    root: Config,
+    node: dict[str, Any],
+    active_indices: tuple[str, ...] = (),
+    depth: int = 1,
+) -> dict[str, Any]:
+    path = "body." * (depth - 1) + "operator"
+    if depth > MAX_RECURSIVE_DEPTH:
+        raise ValueError(
+            f"Recursive operator answer exceeds the maximum depth of {MAX_RECURSIVE_DEPTH} at {path}."
+        )
+    operator = node.get("operator")
+    limits = node.get("limits")
+    if operator not in OPS or operator == "custom":
+        raise ValueError(f"Recursive node at {path} must use a built-in operator.")
+    if limits not in COMPONENT_MAP:
+        raise ValueError(f"Recursive node at {path} has an invalid limits form.")
+    allowed = {"bounds", "domain"} if operator in FLEXIBLE else {OPS[operator][1]}
+    if limits not in allowed:
+        raise ValueError(
+            f'Recursive node at {path} does not support limits="{limits}".'
+        )
+    components = COMPONENT_MAP[cast(LimitFormat, limits)]
+    keys = {"_type", "_version", "operator", "limits", "index", *components}
+    if limits == "approach":
+        keys.add("direction")
+    if (
+        set(node) != keys
+        or node.get("_type") != "operator_expression"
+        or node.get("_version") != 2
+    ):
+        raise ValueError(
+            f"Recursive node at {path} is not a well-formed version 2 node."
+        )
+    index_value = _decode(node["index"])
+    if not isinstance(index_value, sympy.Symbol):
+        raise TypeError(f"Recursive index at {path} must be a symbol.")
+    index = str(index_value)
+    if index in active_indices:
+        raise ValueError(f'Recursive index "{index}" is already active at {path}.')
+    variables = tuple(dict.fromkeys((*root.variables, *active_indices)))
+    result: dict[str, Any] = {
+        "_type": "operator_expression",
+        "_version": 2,
+        "operator": operator,
+        "limits": limits,
+        "index": _json(index_value),
+    }
+    for component in components:
+        if component == "body":
+            continue
+        value = _decode(node[component], variables)
+        if not isinstance(value, sympy.Basic):
+            raise TypeError(f"Recursive {component} at {path} must be SymPy JSON.")
+        if component == "domain" and not _is_set_input(value):
+            raise ValueError(f"Recursive domain at {path} must be a set.")
+        result[component] = _json(value)
+    if limits == "approach":
+        direction = node.get("direction")
+        if direction not in DIRECTION_SYMBOLS:
+            raise ValueError(f"Recursive direction at {path} is invalid.")
+        result["direction"] = direction
+    child = node["body"]
+    if _is_recursive(child):
+        result["body"] = _validated_recursive_node(
+            root, cast(dict[str, Any], child), (*active_indices, index), depth + 1
+        )
+    else:
+        body_variables = tuple(dict.fromkeys((*variables, index)))
+        body = _decode(child, body_variables)
+        if not isinstance(body, sympy.Basic):
+            raise ValueError(f"Terminal body below {path} must be SymPy JSON.")
+        if operator in {
+            "union",
+            "intersection",
+            "disjoint-union",
+        } and not _is_set_input(body):
+            raise ValueError(f"Terminal body below {path} must be a set.")
+        result["body"] = _json(body)
+    return result
+
+
+def _recursive_answer(config: Config, raw: Any) -> dict[str, Any] | None:
+    if _is_recursive(raw):
+        if not _is_recursive(raw.get("body")):
+            raise ValueError(
+                "Version 2 operator expressions require an expanded operator body."
+            )
+        tree = _validated_recursive_node(config, cast(dict[str, Any], raw))
+        if tree["operator"] != config.operator or tree["limits"] != config.limits:
+            raise ValueError(
+                "Recursive correct answer root does not match the element operator or limits form."
+            )
+        if _decode(tree["index"], (config.index,)) != sympy.Symbol(config.index):
+            raise ValueError(
+                "Recursive correct answer root index does not match index-variable."
+            )
+        if config.limits == "approach" and tree.get("direction") != config.direction:
+            raise ValueError(
+                "Recursive correct answer root direction does not match limit-direction."
+            )
+        return tree
+    if not isinstance(raw, str):
+        return None
+    formatted = _formatted_call(raw, OPERATOR_SNAKECASE[config.operator])
+    if formatted is None or _formatted_operator(formatted[0]) is None:
+        return None
+    tree = _recursive_node(config, raw, config.variables)
+    if tree["operator"] != config.operator or tree["limits"] != config.limits:
+        raise ValueError(
+            "Recursive correct answer root does not match the element operator or limits form."
+        )
+    if _decode(tree["index"], (config.index,)) != sympy.Symbol(config.index):
+        raise ValueError(
+            "Recursive correct answer root index does not match index-variable."
+        )
+    if config.limits == "approach" and tree.get("direction") != config.direction:
+        raise ValueError(
+            "Recursive correct answer root direction does not match limit-direction."
+        )
+    return tree
+
+
 def _canonical(
     config: Config,
     values: dict[str, sympy.Basic],
@@ -740,6 +993,9 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
         )
     if raw is None:
         return None
+    recursive = _recursive_answer(config, raw)
+    if recursive is not None:
+        return recursive
     if isinstance(raw, dict) and raw.get("_type") == "operator_expression":  # type: ignore
         return _structured(config, raw)  # type: ignore
     if config.correct_components:
@@ -844,21 +1100,36 @@ def _direction_input(
     }
 
 
-def _question(config: Config, data: pl.QuestionData) -> str:
+def _question(
+    config: Config,
+    data: pl.QuestionData,
+    *,
+    body_html: str | None = None,
+    component_scores: dict[str, float] | None = None,
+) -> str:
     index = sympy.latex(sympy.Symbol(config.index))
-    component_scores = _component_scores(config, data)
+    component_scores = (
+        _component_scores(config, data)
+        if component_scores is None
+        else component_scores
+    )
     context: dict[str, Any] = {
         config.limits: True,
         "integral": config.operator == "integral",
+        "recursive_body": body_html is not None,
         "operator_latex": config.operator_latex,
         "index_label": index,
-        "body_field": _field(
-            config,
-            "body",
-            "Operator body",
-            16,
-            data,
-            score=component_scores.get("body"),
+        "body_field": (
+            {"html": body_html}
+            if body_html is not None
+            else _field(
+                config,
+                "body",
+                "Operator body",
+                16,
+                data,
+                score=component_scores.get("body"),
+            )
         ),
     }
     partial_score = data.get("partial_scores", {}).get(config.answer)
@@ -916,6 +1187,65 @@ def _question(config: Config, data: pl.QuestionData) -> str:
     )
 
 
+def _node_config(
+    root: Config,
+    node: dict[str, Any],
+    answer: str,
+    ancestor_indices: tuple[str, ...],
+) -> Config:
+    operator = cast(Operator, node["operator"])
+    index_value = _decode(node["index"])
+    if not isinstance(index_value, sympy.Symbol):
+        raise TypeError(f"Recursive answer node {answer} has an invalid index.")
+    direction = cast(DirectionName, node.get("direction", "two-sided"))
+    return replace(
+        root,
+        answer=answer,
+        operator=operator,
+        operator_latex=(
+            root.operator_latex if answer == root.answer else OPS[operator][0]
+        ),
+        limits=cast(LimitFormat, node["limits"]),
+        index=str(index_value),
+        variables=tuple(dict.fromkeys((*root.variables, *ancestor_indices))),
+        direction=direction,
+        correct_attribute=None,
+        correct_components=(),
+    )
+
+
+def _recursive_question(
+    root: Config,
+    node: dict[str, Any],
+    data: pl.QuestionData,
+    answer: str,
+    ancestor_indices: tuple[str, ...] = (),
+    scores: dict[str, float] | None = None,
+) -> str:
+    config = _node_config(root, node, answer, ancestor_indices)
+    child = node["body"]
+    body_html = None
+    if _is_recursive(child):
+        body_html = _recursive_question(
+            root,
+            cast(dict[str, Any], child),
+            data,
+            f"{answer}-body",
+            (*ancestor_indices, config.index),
+            scores,
+        )
+    local_scores = {
+        component: score
+        for component in config.components
+        if (score := (scores or {}).get(config.name(component))) is not None
+    }
+    if config.limits == "approach":
+        direction_score = (scores or {}).get(config.name("direction"))
+        if direction_score is not None:
+            local_scores["direction"] = direction_score
+    return _question(config, data, body_html=body_html, component_scores=local_scores)
+
+
 def _tex(config: Config, raw: dict[str, Any] | None) -> str:
     raw = raw or {}
     get = lambda c: raw.get(config.name(c), "?")
@@ -950,6 +1280,64 @@ def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
     return _tex(config, raw)
 
 
+def _recursive_tex(
+    root: Config,
+    node: dict[str, Any],
+    raw: dict[str, Any] | None = None,
+    answer: str | None = None,
+    ancestor_indices: tuple[str, ...] = (),
+) -> str:
+    answer = answer or root.answer
+    config = _node_config(root, node, answer, ancestor_indices)
+    raw = raw or {}
+
+    def component_tex(component: str) -> str:
+        raw_name = config.name(component)
+        if raw_name in raw:
+            return str(raw[raw_name]) or "?"
+        value = node.get(component)
+        if not isinstance(value, dict):
+            return "?"
+        decoded = _decode(
+            value,
+            tuple(dict.fromkeys((*config.variables, config.index)))
+            if component == "body"
+            else config.variables,
+        )
+        return sympy.latex(decoded) if isinstance(decoded, sympy.Basic) else "?"
+
+    child = node["body"]
+    if _is_recursive(child):
+        body = _recursive_tex(
+            root,
+            cast(dict[str, Any], child),
+            raw,
+            f"{answer}-body",
+            (*ancestor_indices, config.index),
+        )
+    else:
+        body = component_tex("body")
+    index = sympy.latex(sympy.Symbol(config.index))
+    op = config.operator_latex
+    if config.limits == "bounds":
+        if config.operator == "integral":
+            return rf"{op}_{{{component_tex('lower')}}}^{{{component_tex('upper')}}} {body}\,\mathrm{{d}}{index}"
+        return rf"{op}_{{{index}={component_tex('lower')}}}^{{{component_tex('upper')}}} {body}"
+    if config.limits == "domain":
+        if config.operator == "integral":
+            return rf"{op}_{{{component_tex('domain')}}} {body}\,\mathrm{{d}}{index}"
+        return rf"{op}_{{{index}\in {component_tex('domain')}}} {body}"
+    direction_value = (
+        str(raw.get(config.name("direction"), ""))
+        if config.allow_direction_input and config.name("direction") in raw
+        else str(node.get("direction", config.direction))
+    )
+    direction = {"two-sided": "", "from-left": "^-", "from-right": "^+"}.get(
+        direction_value, "^?"
+    )
+    return rf"{op}_{{{index}\to {component_tex('target')}{direction}}} {body}"
+
+
 def _submitted_tex(config: Config, data: pl.QuestionData) -> str:
     structured = data.get("submitted_answers", {}).get(config.answer)
     if isinstance(structured, dict):
@@ -968,10 +1356,36 @@ def _score_badge(score: float) -> dict[str, Any]:
 def render(element_html: str, data: pl.QuestionData) -> str:
     config = _config(element_html, data)
     panel = data.get("panel", "question")
+    correct = _correct(config, data)
+    if _is_recursive(correct):
+        recursive = cast(dict[str, Any], correct)
+        if panel == "question":
+            return _recursive_question(
+                config,
+                recursive,
+                data,
+                config.answer,
+                scores=_recursive_component_scores(config, data, recursive),
+            )
+        if panel == "answer":
+            tex = _recursive_tex(config, recursive)
+        else:
+            tex = _recursive_tex(
+                config, recursive, data.get("raw_submitted_answers", {})
+            )
+        context: dict[str, Any] = {"tex": tex}
+        partial_score = data.get("partial_scores", {}).get(config.answer)
+        if panel != "answer" and partial_score is not None:
+            context.update(_score_badge(float(partial_score.get("score") or 0)))
+        return chevron.render(
+            (HERE / "pl-big-operator-input-submission.mustache").read_text(),
+            context,
+            partials_path=str(HERE / "partials"),
+            partials_ext="mustache",
+        )
     if panel == "question":
         return _question(config, data)
     if panel == "answer":
-        correct = _correct(config, data)
         if correct is None:
             return ""
         return chevron.render(
@@ -1085,9 +1499,153 @@ def _parse_values(
     return result if len(result) == len(config.components) else None
 
 
+def _parse_recursive_field(
+    config: Config,
+    component: Component,
+    data: pl.QuestionData,
+) -> tuple[sympy.Basic | None, bool]:
+    name = config.name(component)
+    raw = data.get("raw_submitted_answers", {})
+    if not str(raw.get(name, "")).strip() and _component_allows_blank(
+        config, component
+    ):
+        data.setdefault("submitted_answers", {})[name] = ""
+        data.get("format_errors", {}).pop(name, None)
+        return None, True
+    variables = (
+        tuple(dict.fromkeys((*config.variables, config.index)))
+        if component == "body"
+        else config.variables
+    )
+    field_markup = symbolic_input_adapter.markup(
+        name=name,
+        variables=variables,
+        custom_functions=config.custom_functions,
+        label={
+            "lower": "Lower bound",
+            "upper": "Upper bound",
+            "domain": "Index domain",
+            "target": "Approach target",
+            "body": "Operator body",
+        }[component],
+        size=16 if component == "body" else 10,
+        allow_sets=_requires_set(config, component),
+        allow_complex=config.allow_complex,
+    )
+    symbolic_input_adapter.parse(field_markup, data)
+    encoded = data.get("submitted_answers", {}).get(name)
+    if not isinstance(encoded, dict):
+        return None, False
+    try:
+        value = cast(
+            sympy.Basic,
+            psu.json_to_sympy(
+                cast(Any, encoded),
+                allow_sets=True,
+                allow_complex=config.allow_complex,
+            ),
+        )
+        if _requires_set(config, component) and not _is_set_input(value):
+            data.setdefault("format_errors", {})[name] = "This field must be a set."
+            return None, False
+        return value, False
+    except Exception as exc:  # noqa: BLE001
+        data.setdefault("format_errors", {})[name] = str(exc)
+        return None, False
+
+
+def _parse_recursive_node(
+    root: Config,
+    correct: dict[str, Any],
+    data: pl.QuestionData,
+    answer: str,
+    ancestor_indices: tuple[str, ...] = (),
+) -> tuple[dict[str, Any] | None, bool]:
+    config = _node_config(root, correct, answer, ancestor_indices)
+    result = {
+        "_type": "operator_expression",
+        "_version": 2,
+        "operator": config.operator,
+        "limits": config.limits,
+        "index": _json(sympy.Symbol(config.index)),
+    }
+    blank = False
+    complete = True
+    for component in config.components:
+        if component == "body":
+            continue
+        value, field_blank = _parse_recursive_field(config, component, data)
+        blank |= field_blank
+        if value is None:
+            complete = False
+        else:
+            result[component] = _json(value)
+    if config.limits == "approach":
+        direction = config.direction
+        if config.allow_direction_input:
+            name = config.name("direction")
+            raw_direction = str(
+                data.get("raw_submitted_answers", {}).get(name, "")
+            ).strip()
+            if not raw_direction and _component_allows_blank(
+                config, cast(Component, "direction")
+            ):
+                data.setdefault("submitted_answers", {})[name] = ""
+                data.get("format_errors", {}).pop(name, None)
+                blank = True
+                complete = False
+            elif raw_direction not in DIRECTION_SYMBOLS:
+                data.setdefault("format_errors", {})[name] = (
+                    "Select a valid limit direction."
+                )
+                data.setdefault("submitted_answers", {})[name] = None
+                complete = False
+            else:
+                direction = cast(DirectionName, raw_direction)
+                data.setdefault("submitted_answers", {})[name] = direction
+                data.get("format_errors", {}).pop(name, None)
+        result["direction"] = direction
+    child = correct["body"]
+    if _is_recursive(child):
+        child_result, child_blank = _parse_recursive_node(
+            root,
+            cast(dict[str, Any], child),
+            data,
+            f"{answer}-body",
+            (*ancestor_indices, config.index),
+        )
+        blank |= child_blank
+        if child_result is None:
+            complete = False
+        else:
+            result["body"] = child_result
+    else:
+        value, field_blank = _parse_recursive_field(config, "body", data)
+        blank |= field_blank
+        if value is None:
+            complete = False
+        else:
+            result["body"] = _json(value)
+    return (result if complete else None), blank
+
+
 def parse(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
+    correct = _correct(config, data)
+    if _is_recursive(correct):
+        result, blank = _parse_recursive_node(
+            config, cast(dict[str, Any], correct), data, config.answer
+        )
+        errors = data.get("format_errors", {})
+        recursive_names = (
+            name
+            for name in errors
+            if name == config.answer or name.startswith(f"{config.answer}-")
+        )
+        has_error = any(True for _ in recursive_names)
+        submitted[config.answer] = None if has_error else "" if blank else result
+        return
     raw = data.get("raw_submitted_answers", {})
     blank_components = [
         component
@@ -1211,6 +1769,109 @@ def _expressions_equivalent(left: sympy.Basic, right: sympy.Basic) -> bool:
         return False
 
 
+def _recursive_construct(
+    root: Config,
+    node: dict[str, Any],
+    answer: str | None = None,
+    ancestor_indices: tuple[str, ...] = (),
+) -> sympy.Basic:
+    answer = answer or root.answer
+    config = _node_config(root, node, answer, ancestor_indices)
+    values: dict[str, sympy.Basic] = {}
+    for component in config.components:
+        if component == "body":
+            continue
+        decoded = _decode(node[component], config.variables)
+        if not isinstance(decoded, sympy.Basic):
+            raise TypeError(f"Invalid recursive {component} at {answer}.")
+        values[component] = decoded
+    child = node["body"]
+    if _is_recursive(child):
+        body = _recursive_construct(
+            root,
+            cast(dict[str, Any], child),
+            f"{answer}-body",
+            (*ancestor_indices, config.index),
+        )
+    else:
+        body = _decode(child, tuple(dict.fromkeys((*config.variables, config.index))))
+        if not isinstance(body, sympy.Basic):
+            raise ValueError(f"Invalid recursive terminal body at {answer}.")
+    values["body"] = body
+    return _construct(config, values, cast(DirectionName | None, node.get("direction")))
+
+
+def _recursive_component_comparisons(
+    root: Config,
+    submitted: dict[str, Any],
+    correct: dict[str, Any],
+    answer: str | None = None,
+    ancestor_indices: tuple[str, ...] = (),
+) -> list[tuple[str, bool, bool]]:
+    """Return (raw field name, correct, terminal body) for every visible field."""
+    answer = answer or root.answer
+    config = _node_config(root, correct, answer, ancestor_indices)
+    comparisons: list[tuple[str, bool, bool]] = []
+    for component in config.components:
+        if component == "body":
+            continue
+        left = _decode(submitted[component], config.variables)
+        right = _decode(correct[component], config.variables)
+        comparisons.append(
+            (config.name(component), _expressions_equivalent(left, right), False)
+        )
+    if config.limits == "approach" and config.allow_direction_input:
+        comparisons.append(
+            (
+                config.name("direction"),
+                submitted.get("direction") == correct.get("direction"),
+                False,
+            )
+        )
+    submitted_body, correct_body = submitted["body"], correct["body"]
+    if _is_recursive(correct_body):
+        if not _is_recursive(submitted_body):
+            return [*comparisons, (config.name("body"), False, True)]
+        comparisons.extend(
+            _recursive_component_comparisons(
+                root,
+                cast(dict[str, Any], submitted_body),
+                cast(dict[str, Any], correct_body),
+                f"{answer}-body",
+                (*ancestor_indices, config.index),
+            )
+        )
+    else:
+        variables = tuple(dict.fromkeys((*config.variables, config.index)))
+        comparisons.append(
+            (
+                config.name("body"),
+                _expressions_equivalent(
+                    _decode(submitted_body, variables),
+                    _decode(correct_body, variables),
+                ),
+                True,
+            )
+        )
+    return comparisons
+
+
+def _recursive_component_scores(
+    config: Config, data: pl.QuestionData, correct: dict[str, Any]
+) -> dict[str, float]:
+    if config.grading != "component":
+        return {}
+    submitted = data.get("submitted_answers", {}).get(config.answer)
+    if not _is_recursive(submitted):
+        return {}
+    return {
+        name: float(matches)
+        for name, matches, _ in _recursive_component_comparisons(
+            config, cast(dict[str, Any], submitted), correct
+        )
+    }
+
+
 def grade(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html, data)
     correct_json = _correct(config, data)
@@ -1221,6 +1882,44 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
     else:
         submitted_json = data.get("submitted_answers", {}).get(config.answer)
         if not isinstance(submitted_json, dict):
+            return
+        if _is_recursive(correct_json):
+            if not _is_recursive(submitted_json):
+                score = 0.0
+            elif config.grading == "exact":
+                score = float(submitted_json == correct_json)
+            elif config.grading == "component":
+                comparisons = _recursive_component_comparisons(
+                    config,
+                    cast(dict[str, Any], submitted_json),
+                    cast(dict[str, Any], correct_json),
+                )
+                weights = [
+                    config.body_weight if terminal else 1
+                    for _, _, terminal in comparisons
+                ]
+                earned = sum(
+                    weight
+                    for (_, matches, _), weight in zip(comparisons, weights)
+                    if matches
+                )
+                score = earned / sum(weights)
+            else:
+                try:
+                    left = _recursive_construct(
+                        config, cast(dict[str, Any], submitted_json)
+                    )
+                    right = _recursive_construct(
+                        config, cast(dict[str, Any], correct_json)
+                    )
+                    score = float(_expressions_equivalent(left, right))
+                except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
+                    score = 0.0
+            data.setdefault("partial_scores", {})[config.answer] = {
+                "score": score,
+                "weight": config.weight,
+            }
+            pl.set_weighted_score_data(data)
             return
         submitted, correct = (
             _values(config, submitted_json),
