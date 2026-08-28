@@ -536,7 +536,7 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         pl.get_boolean_attrib(element, "allow-limit-direction-input", True)
     )
     variables = _get_tuple_attrib(element, "variables")
-    custom_functions = _get_tuple_attrib(element, "custom_functions")
+    custom_functions = _get_tuple_attrib(element, "custom-functions")
     allowed_blank: AllowedBlank | str = (
         pl.get_string_attrib(element, "allowed-blank", "none") or "none"
     )
