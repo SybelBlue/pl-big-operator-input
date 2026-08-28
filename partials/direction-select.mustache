@@ -6,7 +6,6 @@
     id="{{ name }}"
     name="{{ name }}"
     aria-label="Limit direction"
-    required
   >
     <option value="">?</option>
     {{#options}}
@@ -15,6 +14,17 @@
   </select>
   {{#feedback}}<span class="invalid-feedback d-block">{{ feedback }}</span>{{/feedback}}
   {{#score_badge}}
-    <span class="pl-big-operator-input__direction-score">{{> score-badge }}</span>
+    <span class="pl-big-operator-input__direction-score">
+      {{#correct}}
+        <span class="badge text-bg-success" aria-label="Correct">
+          <i class="fas fa-check" aria-hidden="true"></i>
+        </span>
+      {{/correct}}
+      {{#incorrect}}
+        <span class="badge text-bg-danger" aria-label="Incorrect">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </span>
+      {{/incorrect}}
+    </span>
   {{/score_badge}}
 </div>
