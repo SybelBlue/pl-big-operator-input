@@ -420,6 +420,21 @@ def test_builtin_operator_accepts_custom_latex():
     assert r"\(\displaystyle \star\)" in mod.render(markup, data())
 
 
+def test_inferred_builtin_operator_accepts_custom_latex():
+    markup = html(
+        **{
+            "index-variable": None,
+            "correct-answer": "Sum(k, (k, 1, 2))",
+            "operator-latex": r"\Sigma",
+        }
+    )
+
+    config = mod._config(markup, data())
+
+    assert config.operator == "sum"
+    assert config.operator_latex == r"\Sigma"
+
+
 @pytest.mark.parametrize(
     "operator",
     [
@@ -594,6 +609,26 @@ def canonical(operator="union", limits="domain"):
         "domain": mod._json(sympy.FiniteSet(1, 2)),
         "body": mod._json(sympy.FiniteSet(k)),
     }
+
+
+def test_canonical_custom_answer_infers_operator_and_limits():
+    answer = canonical(operator="custom")
+    answer["operator_latex"] = r"\star"
+    state = data(answer)
+    markup = html(
+        **{
+            "index-variable": None,
+            "operator-latex": r"\star",
+            "grading-method": "component",
+        }
+    )
+
+    mod.prepare(markup, state)
+
+    config = mod._config(markup, state)
+    assert config.operator == "custom"
+    assert config.limits == "domain"
+    assert config.index == "k"
 
 
 def test_domain_structured_answer_and_rendering():
@@ -1049,6 +1084,22 @@ def test_exact_and_equivalent_grading(grading):
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
+def test_equivalent_grading_domain_sum():
+    markup = html(
+        **{
+            "index-variable": None,
+            "correct-answer": "Sum(k, (k, {1, 2}))",
+        }
+    )
+    state = data(raw={"op-domain": "{1, 2}", "op-body": "k"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
 def test_allowed_blank_and_independent_parse_errors():
     blank = data(raw={"op-start": "", "op-end": "", "op-body": ""})
     mod.parse(html(operator="sum", **{"allowed-blank": "all"}), blank)
@@ -1308,6 +1359,37 @@ def test_schema_accepts_implied_custom_operator():
         mod.lxml.html.fragment_fromstring(markup),
         HERE / "pl-big-operator-input.schema.json",
     )
+
+
+@pytest.mark.parametrize(
+    "markup",
+    [
+        html(operator="limit", limits="bounds"),
+        html(operator="custom", limits="bounds"),
+        html(
+            **{
+                "correct-answer-start": "1",
+                "correct-answer-end": "2",
+                "correct-answer-body": "k",
+            }
+        ),
+        html(
+            operator="sum",
+            **{
+                "index-variable": None,
+                "correct-answer-start": "1",
+                "correct-answer-end": "2",
+                "correct-answer-body": "k",
+            },
+        ),
+    ],
+)
+def test_schema_rejects_statically_invalid_configurations(markup):
+    with pytest.raises(ValueError):
+        mod.pl.validate_element(
+            mod.lxml.html.fragment_fromstring(markup),
+            HERE / "pl-big-operator-input.schema.json",
+        )
 
 
 def test_custom_operator_correct_answer_panel_renders_complete_notation():
