@@ -118,5 +118,75 @@
       "type": "string"
     }
   },
-  "required": ["answers-name"]
+  "required": ["answers-name"],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "not": {
+            "required": ["operator"]
+          }
+        },
+        {
+          "properties": {
+            "operator": {
+              "enum": [
+                "sum",
+                "product",
+                "integral",
+                "union",
+                "intersection",
+                "disjoint-union",
+                "and",
+                "or",
+                "min",
+                "max"
+              ]
+            },
+            "limits": {
+              "enum": ["auto", "bounds", "domain"]
+            }
+          },
+          "required": ["operator"]
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "limit"
+            },
+            "limits": {
+              "enum": ["auto", "approach"]
+            }
+          },
+          "required": ["operator"]
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "custom"
+            }
+          },
+          "required": ["operator", "operator-latex"]
+        }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "not": {
+            "anyOf": [
+              {"required": ["correct-answer-start"]},
+              {"required": ["correct-answer-end"]},
+              {"required": ["correct-answer-domain"]},
+              {"required": ["correct-answer-target"]},
+              {"required": ["correct-answer-body"]}
+            ]
+          }
+        },
+        {
+          "required": ["operator", "index-variable"]
+        }
+      ]
+    }
+  ]
 }

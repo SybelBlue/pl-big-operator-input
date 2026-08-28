@@ -263,11 +263,15 @@ def _infer_spec(
             index = _symbol_name(_decode(raw.get("index")))
         except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
             index = None
-        return (
-            operator if operator in OPS else None,
-            cast(LimitFormat, limits) if limits in COMPONENT_MAP else None,
-            index,
+        well_formed_spec = (
+            raw.get("_version") == 1
+            and operator in {*OPS, "custom"}
+            and limits in COMPONENT_MAP
+            and index is not None
         )
+        if not well_formed_spec:
+            return None, None, None
+        return operator, cast(LimitFormat, limits), index
     if raw.get("_type") == "sympy":
         try:
             value = _decode(raw)
@@ -359,8 +363,8 @@ def _config(html: str, data: Any | None = None) -> Config:
     if (
         operator := (
             explicit_operator
-            or ("custom" if custom_latex is not None else None)
             or inferred_operator
+            or ("custom" if custom_latex is not None else None)
         )
     ) is None:
         raise ValueError(
@@ -1053,7 +1057,11 @@ def _construct(config: Config, values: dict[str, sympy.Basic]) -> sympy.Basic:
         raise NotImplementedError(
             "Equivalent grading of domain forms requires a concrete FiniteSet domain."
         )
-    terms = [body.subs(index, item) for item in domain]
+    terms: list[sympy.Expr] = [body.subs(index, item) for item in domain]  # type: ignore
+    if config.operator == "sum":
+        return sympy.Add(*terms)
+    if config.operator == "product":
+        return sympy.Mul(*terms)
     return SYMPY_CONSTRUCTORS[config.operator](*terms)
 
 
@@ -1062,10 +1070,10 @@ def _equivalent(
     left_values: dict[str, sympy.Basic],
     right_values: dict[str, sympy.Basic],
 ) -> bool:
-    left, right = _construct(config, left_values), _construct(config, right_values)
-    if left == right:
-        return True
     try:
+        left, right = _construct(config, left_values), _construct(config, right_values)
+        if left == right:
+            return True
         left, right = left.doit(), right.doit()
         if left == right:
             return True
