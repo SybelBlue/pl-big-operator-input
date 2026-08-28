@@ -156,7 +156,7 @@ def _raw_correct_answer(
         return None
     correct_answers = data.get("correct_answers", {})
     if not isinstance(correct_answers, dict):
-        raise ValueError("QuestionData correct_answers must be a mapping.")
+        raise TypeError("data['correct_answers'] must be a mapping.")
     return correct_answers.get(answer)
 
 
