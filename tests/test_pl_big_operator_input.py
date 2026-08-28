@@ -1337,6 +1337,22 @@ def test_component_grading_weights_body():
     assert state["partial_scores"]["op"]["score"] == pytest.approx(0.75)
 
 
+def test_component_grading_uses_equivalence_for_each_field():
+    k = sympy.Symbol("k")
+    correct = sympy.Sum(2 * k, (k, 2, 4))  # type: ignore
+    state = data(
+        correct,
+        {"op-start": "1 + 1", "op-end": "8 / 2", "op-body": "k + k"},
+    )
+    markup = html(operator="sum", **{"grading-method": "component"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
 def test_component_grading_shows_icon_only_badges_on_symbolic_inputs():
     k = sympy.Symbol("k")
     markup = html(operator="sum", **{"grading-method": "component"})
