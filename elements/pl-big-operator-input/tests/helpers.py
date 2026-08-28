@@ -1,23 +1,21 @@
 from __future__ import annotations
 
-import pytest
-
 
 class RegressionTestSuite:
-    pytestmark = pytest.mark.regression
+    pass
 
 
 class SmokeTestSuite:
-    pytestmark = pytest.mark.smoke
+    pass
 
 
 class UnitTestSuite:
-    pytestmark = pytest.mark.unit
+    pass
 
 
 class AdapterTestSuite:
-    pytestmark = pytest.mark.vendor_contract
+    pass
 
 
 class BrowserTestSuite:
-    pytestmark = pytest.mark.browser
+    pass
