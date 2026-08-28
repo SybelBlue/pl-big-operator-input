@@ -1023,6 +1023,44 @@ def test_prepare_component_correct_answer_enforces_set_fields():
         )
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "correct,component",
+    [
+        ("Union(k + 1, (k, {1, 2}))", "body"),
+        ("Union({k}, (k, 1))", "domain"),
+    ],
+)
+def test_whole_set_correct_answer_enforces_set_fields(correct, component):
+    with pytest.raises(ValueError, match=rf'component "{component}" must be a set'):
+        mod.prepare(html(operator="union", **{"correct-answer": correct}), data())
+
+
+@pytest.mark.regression
+def test_structured_correct_answer_rejects_disallowed_complex_value():
+    config = mod._config(html(operator="sum"))
+    answer = mod._canonical(
+        config, {"lower": sympy.Integer(1), "upper": sympy.Integer(2), "body": sympy.I}
+    )
+    with pytest.raises(ValueError, match="complex"):
+        mod.prepare(html(operator="sum", **{"allow-complex": "false"}), data(answer))
+
+
+@pytest.mark.regression
+def test_structured_correct_answer_rejects_undeclared_symbol():
+    config = mod._config(html(operator="sum"))
+    answer = mod._canonical(
+        config,
+        {
+            "lower": sympy.Integer(1),
+            "upper": sympy.Integer(2),
+            "body": sympy.Symbol("undeclared"),
+        },
+    )
+    with pytest.raises(ValueError, match="undeclared"):
+        mod.prepare(html(operator="sum"), data(answer))
+
+
 def test_prepare_rejects_irrelevant_component_correct_answer_attribute():
     with pytest.raises(ValueError, match="cannot be used"):
         mod.prepare(html(operator="sum", **{"correct-answer-domain": "{1}"}), data())
@@ -1113,6 +1151,56 @@ def test_parse_only_relevant_fields_and_allows_index_in_body():
     answer = state["submitted_answers"]["op"]
     assert answer["limits"] == "domain" and "domain" in answer and "lower" not in answer
     assert "op-start" not in state["submitted_answers"]
+
+
+@pytest.mark.regression
+def test_component_parse_clears_stale_format_error_after_valid_reparse():
+    markup = html(operator="sum")
+    state = data(raw={"op-start": "bad@", "op-end": "2", "op-body": "k"})
+    mod.parse(markup, state)
+    assert "op-start" in state["format_errors"]
+
+    state["raw_submitted_answers"]["op-start"] = "1"
+    mod.parse(markup, state)
+
+    assert "op-start" not in state["format_errors"]
+    assert state["submitted_answers"]["op"] is not None
+
+
+@pytest.mark.regression
+def test_invalid_reparse_replaces_previous_partial_score_with_zero():
+    markup = html(operator="sum", **{"correct-answer": "Sum(k, (k, 1, 2))"})
+    state = data(raw={"op-start": "1", "op-end": "2", "op-body": "k"})
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    assert state["partial_scores"]["op"]["score"] == 1
+
+    state["raw_submitted_answers"]["op-body"] = "bad@"
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"] == {"score": 0.0, "weight": 1}
+
+
+@pytest.mark.regression
+def test_component_score_badge_uses_grading_equivalence():
+    markup = html(
+        operator="sum",
+        **{
+            "grading-method": "component",
+            "correct-answer-start": "1",
+            "correct-answer-end": "2",
+            "correct-answer-body": "(k+1)^2",
+        },
+    )
+    state = data(raw={"op-start": "1", "op-end": "2", "op-body": "k^2+2*k+1"})
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    assert state["partial_scores"]["op"]["score"] == 1
+    assert mod._component_scores(mod._config(markup, state), state)["body"] == 1
 
 
 @pytest.mark.parametrize("operator", ["sum", "product", "integral", "union", "min"])

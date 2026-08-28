@@ -218,8 +218,28 @@ def _formatted_direction(limits: list[str]) -> DirectionSymbol | None:
     return source[1:-1]  # type: ignore
 
 
+def _legacy_limit_call(source: str) -> tuple[str, list[str]] | None:
+    """Parse SymPy's documented ``Limit(body, index, target, dir=...)`` form."""
+    match = re.fullmatch(r"\s*Limit\s*\((.*)\)\s*", source, re.DOTALL)
+    if match is None:
+        return None
+    arguments = _split_top_level(match.group(1))
+    if len(arguments) != 4:
+        return None
+    direction = re.fullmatch(r"dir\s*=\s*(['\"])(\+-|\+|-)\1", arguments[3])
+    if direction is None:
+        return None
+    return arguments[0], [arguments[1], arguments[2], repr(direction.group(2))]
+
+
 def _symbol_name(value: Any) -> str | None:
     return str(value) if isinstance(value, sympy.Symbol) else None
+
+
+def _identifier(source: str) -> str | None:
+    """Return a supported PrairieLearn identifier without evaluating it."""
+    token = source.strip()
+    return token if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", token) else None
 
 
 def _binder_index(value: Any) -> str | None:
@@ -248,11 +268,10 @@ def _infer_spec(
                 return None, None, None
             operator = parsed_operator
             formatted = _formatted_call(raw, OPERATOR_SNAKECASE[parsed_operator])
+            if formatted is None and parsed_operator == "limit":
+                formatted = _legacy_limit_call(raw)
             if formatted is not None:
-                try:
-                    index = _symbol_name(sympy.sympify(formatted[1][0]))
-                except (IndexError, sympy.SympifyError, TypeError):
-                    index = None
+                index = _identifier(formatted[1][0]) if formatted[1] else None
                 if parsed_operator == "limit":
                     return operator, "approach", index
                 limit_count = len(formatted[1])
@@ -530,25 +549,16 @@ def _decode(value: Any, variables: tuple[str, ...] = ()) -> Any:
             # student-input parser cannot round-trip every value emitted by
             # sympy_to_json: binder tuples look like intervals, and Boolean
             # relations are rejected by its expression allowlist.
-            if (
-                source.lstrip().startswith(("{", "["))
-                or " ∪ " in source
-                or " ∩ " in source
-            ):
+            try:
                 return psu.json_to_sympy(cast(Any, value), allow_sets=True)
-            return sympy.sympify(  # type: ignore[call-overload]
-                source, locals=locals
-            )
+            except Exception:  # noqa: BLE001 -- compatibility with the pinned PSU serializer.
+                # TODO(upstream PSU canonical decoder): remove this trusted-author-only
+                # fallback when json_to_sympy round-trips binders and relations emitted
+                # by sympy_to_json. Student answers never enter _decode.
+                return sympy.sympify(source, locals=locals)  # type: ignore[call-overload]
 
         case str():
-            try:
-                return sympy.sympify(  # type: ignore[call-overload]
-                    value, locals=locals
-                )
-            except (sympy.SympifyError, TypeError) as exc:
-                raise ValueError(
-                    "The correct answer contains invalid SymPy data."
-                ) from exc
+            raise ValueError("Bare mathematical strings must use the PrairieLearn parser.")
 
         case _:
             return value
@@ -617,7 +627,25 @@ def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "Every mathematical component must be PrairieLearn SymPy JSON."
         )
+    _validate_component_values(config, cast(dict[str, sympy.Basic], values))
     return _canonical(config, cast(dict[str, sympy.Basic], values))
+
+
+def _validate_component_values(
+    config: Config, values: dict[str, sympy.Basic]
+) -> None:
+    allowed = set(config.variables) | {config.index}
+    for component, item in values.items():
+        if _requires_set(config, cast(Component, component)) and not _is_set_input(item):
+            raise ValueError(f'Correct answer component "{component}" must be a set.')
+        undeclared = {str(symbol) for symbol in item.free_symbols} - allowed
+        if undeclared:
+            raise ValueError(
+                "Correct answer contains undeclared symbol(s): "
+                + ", ".join(sorted(undeclared))
+            )
+        if not config.allow_complex and item.has(sympy.I):
+            raise ValueError("Correct answer contains a complex value, but complex values are disabled.")
 
 
 def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, Any]:
@@ -692,6 +720,8 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
 
 def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
     formatted = _formatted_call(source, OPERATOR_SNAKECASE[config.operator])
+    if formatted is None and config.operator == "limit":
+        formatted = _legacy_limit_call(source)
     if formatted is None:
         return None
     body_source, limits = formatted
@@ -707,10 +737,10 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
             tuple(dict.fromkeys((*config.variables, config.index))),
             config.custom_functions,
         )
-        index = sympy.sympify(limits[0])
+        index_name = _identifier(limits[0])
     except (sympy.SympifyError, TypeError, ValueError) as exc:
         raise ValueError("The correct answer contains invalid SymPy data.") from exc
-    if index != sympy.Symbol(config.index):
+    if index_name != config.index:
         raise ValueError("Correct answer index does not match index-variable.")
     if config.limits == "approach":
         direction = _formatted_direction(limits)
@@ -727,19 +757,25 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
             target = _parse(limits[1], config.variables, config.custom_functions)
         except (sympy.SympifyError, TypeError, ValueError) as exc:
             raise ValueError("The correct answer contains invalid SymPy data.") from exc
-        return _canonical(config, {"target": target, "body": body})
+        values = {"target": target, "body": body}
+        _validate_component_values(config, values)
+        return _canonical(config, values)
     if config.limits == "bounds":
         try:
             lower = _parse(limits[1], config.variables, config.custom_functions)
             upper = _parse(limits[2], config.variables, config.custom_functions)
         except (sympy.SympifyError, TypeError, ValueError) as exc:
             raise ValueError("The correct answer contains invalid SymPy data.") from exc
-        return _canonical(config, {"lower": lower, "upper": upper, "body": body})
+        values = {"lower": lower, "upper": upper, "body": body}
+        _validate_component_values(config, values)
+        return _canonical(config, values)
     try:
         domain = _parse(limits[1], config.variables, config.custom_functions)
     except (sympy.SympifyError, TypeError, ValueError) as exc:
         raise ValueError("The correct answer contains invalid SymPy data.") from exc
-    return _canonical(config, {"domain": domain, "body": body})
+    values = {"domain": domain, "body": body}
+    _validate_component_values(config, values)
+    return _canonical(config, values)
 
 
 def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
@@ -767,6 +803,9 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
         converted = _formatted_answer(config, raw)
         if converted is not None:
             return converted
+        raise TypeError(
+            f'Correct answer "{config.answer}" must be a matching formatted object or canonical structured dictionary.'
+        )
     value = _decode(raw, tuple(dict.fromkeys((*config.variables, config.index))))
     converted = _binder(config, value)
     if converted is not None:
@@ -831,7 +870,9 @@ def _component_scores(config: Config, data: pl.QuestionData) -> dict[str, float]
     submitted = _values(config, submitted_json)
     correct = _values(config, correct_json)
     scores = {
-        component: float(submitted[component] == correct[component])
+        component: float(
+            _expressions_equivalent(submitted[component], correct[component])
+        )
         for component in config.components
     }
     if config.limits == "approach" and config.allow_direction_input:
@@ -1106,6 +1147,7 @@ def _parse_values(
                 data.setdefault("format_errors", {})[name] = "This field must be a set."
                 continue
             result[component] = value
+            data.get("format_errors", {}).pop(name, None)
         except Exception as exc:  # noqa: BLE001 -- delegated JSON decoding can expose parser errors.
             data.setdefault("format_errors", {})[name] = str(exc)
     return result if len(result) == len(config.components) else None
@@ -1155,6 +1197,8 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
 
 
 def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic]:
+    if not all(key in structured for key in config.components):
+        raise ValueError("Operator expression is missing mathematical components.")
     return {
         key: cast(
             sympy.Basic,
@@ -1247,6 +1291,11 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
     else:
         submitted_json = data.get("submitted_answers", {}).get(config.answer)
         if not isinstance(submitted_json, dict):
+            data.setdefault("partial_scores", {})[config.answer] = {
+                "score": 0.0,
+                "weight": config.weight,
+            }
+            pl.set_weighted_score_data(data)
             return
         submitted, correct = (
             _values(config, submitted_json),
