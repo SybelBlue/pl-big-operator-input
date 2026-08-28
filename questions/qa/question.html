@@ -6,9 +6,7 @@
   <table class="table table-bordered align-middle">
     <thead>
       <tr class="sticky-top bg-white">
-        <th scope="col" style="width: 15rem; min-width: 15rem; max-width: 15rem">
-          Description
-        </th>
+        <th scope="col" style="width: 15rem; min-width: 15rem; max-width: 15rem">Description</th>
         <th scope="col">Correct answer</th>
         <th scope="col">Input field</th>
       </tr>
@@ -23,7 +21,7 @@
         <td>
           <pl-big-operator-input
             answers-name="sum"
-            index-variable="k"
+            correct-answer="Sum(k**2, (k, 1, n))"
             variables="n"
             allowed-blank="all"
           ></pl-big-operator-input>
@@ -175,7 +173,7 @@
             <code>grading-method="component"</code>
           </small>
         </td>
-        <td>$\displaystyle { \Huge\bigstar{} }_{j=1}^{4} j^2$</td>
+        <td>$\displaystyle \mathop{ \Huge\bigstar{} }\limits_{j=1}^{4} j^2$</td>
         <td>
           <pl-big-operator-input
             answers-name="custom-direct-sum"

@@ -82,7 +82,7 @@ def test_custom_operator_attribute_accepts_initial_capital():
 
 
 def test_operator_attribute_rejects_other_capitalization():
-    with pytest.raises(ValueError, match='Unknown operator "sUM"'):
+    with pytest.raises(ValueError, match=r"Unknown operator \"sUM\""):
         mod._config(html(operator="SUM"))
 
 
@@ -1133,8 +1133,8 @@ def test_bare_variables_are_accepted_as_symbolic_sets():
 
     assert integral["submitted_answers"]["op"] is not None
     assert union["submitted_answers"]["op"] is not None
-    assert "format_errors" not in integral
-    assert "format_errors" not in union
+    assert not integral.get("format_errors")
+    assert not union.get("format_errors")
 
 
 def test_allow_complex_is_delegated_to_symbolic_inputs():
@@ -1144,7 +1144,7 @@ def test_allow_complex_is_delegated_to_symbolic_inputs():
     mod.parse(markup, state)
 
     assert state["submitted_answers"]["op"] is not None
-    assert "format_errors" not in state
+    assert not state.get("format_errors")
     assert mod._config(markup).allow_complex is False
 
 
@@ -1180,7 +1180,7 @@ def test_custom_functions_are_delegated_to_student_body_input():
     mod.parse(markup, state)
 
     answer = state["submitted_answers"]["op"]
-    assert "format_errors" not in state
+    assert not state.get("format_errors")
     assert mod._decode(answer["body"]) == sympy.Function("f")(sympy.Symbol("k"))
 
 
@@ -1418,7 +1418,7 @@ def test_allowed_blank_submission_is_gradable_as_incorrect():
     mod.parse(markup, state)
     mod.grade(markup, state)
 
-    assert "format_errors" not in state
+    assert not state.get("format_errors")
     assert state["submitted_answers"]["op"] == ""
     assert state["partial_scores"]["op"] == {"score": 0.0, "weight": 1}
 
@@ -1483,7 +1483,7 @@ def test_allowed_blank_modes_accept_the_selected_fields(
 
     assert state["submitted_answers"]["op"] == ""
     assert state["submitted_answers"][blank_field] == ""
-    assert "format_errors" not in state
+    assert not state.get("format_errors")
 
 
 @pytest.mark.parametrize(
@@ -1516,12 +1516,12 @@ def test_invalid_allowed_blank_value_is_rejected():
         (
             "bounds",
             {"op-start": "1", "op-end": "4", "op-body": "k^2"},
-            r"\mathbb{E}_{k=1}^{4} k^{2}",
+            r"\mathop{\mathbb{E}}\limits_{k=1}^{4} k^{2}",
         ),
         (
             "domain",
             {"op-domain": "{1, 2}", "op-body": "k^2"},
-            r"\mathbb{E}_{k\in \left\{1, 2\right\}} k^{2}",
+            r"\mathop{\mathbb{E}}\limits_{k\in \left\{1, 2\right\}} k^{2}",
         ),
     ],
 )
@@ -1633,7 +1633,9 @@ def test_custom_operator_accepts_approach_syntax():
     assert answer["direction"] == "from-left"
     assert values == {"target": sympy.Integer(0), "body": sympy.Symbol("j") ** 2}
     state["panel"] = "answer"
-    assert r"\operatorname{eval}_{j\to 0^-} j^{2}" in mod.render(markup, state)
+    assert r"\mathop{\operatorname{eval}}\limits_{j\to 0^-} j^{2}" in mod.render(
+        markup, state
+    )
 
 
 def test_schema_accepts_implied_custom_operator():
@@ -1702,7 +1704,7 @@ def test_custom_operator_correct_answer_panel_renders_complete_notation():
     mod.prepare(markup, state)
     rendered = mod.render(markup, state)
 
-    assert r"\bigoplus_{k=1}^{4} k^{2}" in rendered
+    assert r"\mathop{\bigoplus}\limits_{k=1}^{4} k^{2}" in rendered
     assert "?" not in rendered
     assert "badge" not in rendered
 

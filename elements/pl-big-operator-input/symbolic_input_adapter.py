@@ -7,6 +7,7 @@ from types import ModuleType
 from typing import Any, cast
 
 import lxml.html
+import prairielearn as pl
 
 HERE = Path(__file__).parent
 VENDOR_DIR = HERE / "vendor" / "prairielearn" / "pl-symbolic-input"
@@ -26,7 +27,7 @@ def _load_controller() -> ModuleType:
     spec.loader.exec_module(module)
     # Upstream normally runs with the element directory as its working directory.
     # Use an absolute template path so this adapter does not mutate process-global cwd.
-    setattr(module, "SYMBOLIC_INPUT_MUSTACHE_TEMPLATE_NAME", str(TEMPLATE_PATH))
+    module.SYMBOLIC_INPUT_MUSTACHE_TEMPLATE_NAME = str(TEMPLATE_PATH)  # type: ignore
     return module
 
 
@@ -71,7 +72,7 @@ def markup(
     return cast(str, lxml.html.tostring(element, encoding="unicode"))
 
 
-def _render_data_view(data: dict[str, Any]) -> dict[str, Any]:
+def _render_data_view(data: dict[str, Any] | pl.QuestionData) -> dict[str, Any]:
     view = dict(data)
     view.setdefault("correct_answers", {})
     view.setdefault("format_errors", {})
@@ -85,7 +86,7 @@ def _render_data_view(data: dict[str, Any]) -> dict[str, Any]:
 
 def render(
     field_markup: str,
-    data: dict[str, Any],
+    data: pl.QuestionData,
     *,
     aria_label: str,
     score: float | None = None,
@@ -113,7 +114,7 @@ def render(
     return rendered
 
 
-def parse(field_markup: str, data: dict[str, Any]) -> None:
+def parse(field_markup: str, data: pl.QuestionData) -> None:
     had_format_errors = "format_errors" in data
     data.setdefault("correct_answers", {})
     data.setdefault("format_errors", {})
@@ -127,4 +128,4 @@ def parse(field_markup: str, data: dict[str, Any]) -> None:
     view["submitted_answers"][name] = view["raw_submitted_answers"].get(name)
     CONTROLLER.parse(field_markup, view)
     if not had_format_errors and not view["format_errors"]:
-        del view["format_errors"]
+        view["format_errors"].clear()

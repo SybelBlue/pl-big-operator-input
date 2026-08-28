@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,19 +10,25 @@ import chevron
 import lxml.html
 import prairielearn as pl
 import prairielearn.sympy_utils as psu
+import symbolic_input_adapter
 import sympy
 import sympy.sets
 
 HERE = Path(__file__).parent
-ADAPTER_SPEC = importlib.util.spec_from_file_location(
-    "pl_big_operator_input_symbolic_adapter", HERE / "symbolic_input_adapter.py"
-)
-if ADAPTER_SPEC is None or ADAPTER_SPEC.loader is None:
-    raise RuntimeError("Could not load the pl-symbolic-input adapter.")
-symbolic_input_adapter = importlib.util.module_from_spec(ADAPTER_SPEC)
-sys.modules[ADAPTER_SPEC.name] = symbolic_input_adapter
-ADAPTER_SPEC.loader.exec_module(symbolic_input_adapter)
-OPS = {
+
+type Operator = Literal[
+    "sum",
+    "product",
+    "integral",
+    "limit",
+    "union",
+    "intersection",
+    "disjoint-union",
+    "min",
+    "max",
+    "custom",
+]
+OPS: dict[Operator, tuple[str, str]] = {
     "sum": (r"\sum", "bounds"),
     "product": (r"\prod", "bounds"),
     "integral": (r"\int", "bounds"),
@@ -35,7 +39,7 @@ OPS = {
     "min": (r"\min", "domain"),
     "max": (r"\max", "domain"),
 }
-FLEXIBLE = {
+FLEXIBLE: set[Operator] = {
     "sum",
     "product",
     "integral",
@@ -45,8 +49,17 @@ FLEXIBLE = {
     "min",
     "max",
 }
-DIRECTIONS = {"two-sided": "+-", "from-left": "-", "from-right": "+"}
-SYMPY_CONSTRUCTORS: dict[str, type[sympy.Basic]] = {
+type DirectionName = Literal["two-sided", "from-left", "from-right"]
+type DirectionSymbol = Literal["+-", "-", "+"]
+DIRECTION_SYMBOLS: dict[DirectionName, DirectionSymbol] = {
+    "two-sided": "+-",
+    "from-left": "-",
+    "from-right": "+",
+}
+DIRECTION_NAMES: dict[DirectionSymbol, DirectionName] = {
+    symbol: name for name, symbol in DIRECTION_SYMBOLS.items()
+}
+SYMPY_CONSTRUCTORS: dict[Operator, type[sympy.Basic]] = {
     "sum": sympy.Sum,
     "product": sympy.Product,
     "integral": sympy.Integral,
@@ -55,25 +68,20 @@ SYMPY_CONSTRUCTORS: dict[str, type[sympy.Basic]] = {
     "disjoint-union": sympy.sets.DisjointUnion,
     "min": sympy.Min,
     "max": sympy.Max,
+    "limit": sympy.Limit,
 }
-FUNCTION_BINDERS = {
+OPERATOR_SNAKECASE: dict[Operator, str] = {
+    "sum": "Sum",
+    "product": "Product",
+    "integral": "Integral",
+    "limit": "Limit",
     "union": "Union",
     "intersection": "Intersection",
     "disjoint-union": "DisjointUnion",
     "min": "Min",
     "max": "Max",
+    "custom": "Custom",
 }
-STRING_OPERATORS = {
-    "Sum": "sum",
-    "Product": "product",
-    "Integral": "integral",
-    "Limit": "limit",
-    **{name: operator for operator, name in FUNCTION_BINDERS.items()},
-}
-OPERATOR_FUNCTIONS = {
-    operator: function for function, operator in STRING_OPERATORS.items()
-}
-OPERATOR_FUNCTIONS["custom"] = "Custom"
 type LimitFormat = Literal["bounds", "domain", "approach"]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
 type AllowedBlank = Literal["none", "limits", "body", "all"]
@@ -94,13 +102,13 @@ CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
 @dataclass(frozen=True)
 class Config:
     answer: str
-    operator: str
+    operator: Operator
     operator_latex: str
     limits: LimitFormat
     index: str
     variables: tuple[str, ...]
     custom_functions: tuple[str, ...]
-    direction: str
+    direction: DirectionName
     allow_direction_input: bool
     allowed_blank: AllowedBlank
     allow_complex: bool
@@ -195,13 +203,13 @@ def _formatted_call(source: str, function_name: str) -> tuple[str, list[str]] | 
     return arguments[0], limits
 
 
-def _formatted_direction(limits: list[str]) -> str | None:
+def _formatted_direction(limits: list[str]) -> DirectionSymbol | None:
     if len(limits) != 3:
         return None
     source = limits[2].strip()
     if len(source) < 2 or source[0] not in {"'", '"'} or source[-1] != source[0]:
         return None
-    return source[1:-1]
+    return source[1:-1]  # type: ignore
 
 
 def _symbol_name(value: Any) -> str | None:
@@ -221,115 +229,109 @@ def _binder_index(value: Any) -> str | None:
 
 def _infer_spec(
     raw: Any,
-) -> tuple[str | None, LimitFormat | None, str | None]:
-    if isinstance(raw, str):
-        match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
-        function = match.group(1) if match else None
-        parsed_operator = (
-            "custom" if function == "Custom" else STRING_OPERATORS.get(function or "")
-        )
-        if parsed_operator is None:
-            return None, None, None
-        operator = parsed_operator
-        formatted = _formatted_call(raw, OPERATOR_FUNCTIONS[parsed_operator])
-        if formatted is not None:
-            try:
-                index = _symbol_name(sympy.sympify(formatted[1][0]))
-            except (IndexError, sympy.SympifyError, TypeError):
-                index = None
-            if parsed_operator == "limit":
-                return operator, "approach", index
-            limit_count = len(formatted[1])
-            if limit_count == 2:
-                return operator, "domain", index
-            if limit_count == 3:
-                return (
-                    operator,
-                    "approach"
-                    if _formatted_direction(formatted[1]) is not None
-                    else "bounds",
-                    index,
-                )
-            return operator, None, index
-        try:
-            value = _decode(raw)
-        except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
-            return operator, None, None
-        return operator, _binder_limits(value), _binder_index(value)
-    if not isinstance(raw, dict):
-        return None, None, None
-    if raw.get("_type") == "operator_expression":
-        operator = raw.get("operator")
-        limits = raw.get("limits")
-        try:
-            index = _symbol_name(_decode(raw.get("index")))
-        except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
-            index = None
-        well_formed_spec = (
-            raw.get("_version") == 1
-            and operator in {*OPS, "custom"}
-            and limits in COMPONENT_MAP
-            and index is not None
-        )
-        if not well_formed_spec:
-            return None, None, None
-        return operator, cast(LimitFormat, limits), index
-    if raw.get("_type") == "sympy":
-        try:
-            value = _decode(raw)
-        except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
-            return None, None, None
-        for operator, expected in {
-            "sum": sympy.Sum,
-            "product": sympy.Product,
-            "integral": sympy.Integral,
-            "limit": sympy.Limit,
-        }.items():
-            if isinstance(value, expected):
-                return operator, _binder_limits(value), _binder_index(value)
-    return None, None, None
-
-
-def _infer_direction(raw: Any, operator: str) -> str | None:
-    if isinstance(raw, dict):
-        if raw.get("_type") == "operator_expression":
-            direction = raw.get("direction")
-            return direction if direction in DIRECTIONS else None
-        if raw.get("_type") == "sympy":
+) -> tuple[Operator | None, LimitFormat | None, str | None]:
+    match raw:
+        case str():
+            regex_match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
+            function = regex_match.group(1) if regex_match else None
+            parsed_operator: Operator | None = next(
+                (key for key, value in OPERATOR_SNAKECASE.items() if value == function),
+                None,
+            )
+            if parsed_operator is None:
+                return None, None, None
+            operator = parsed_operator
+            formatted = _formatted_call(raw, OPERATOR_SNAKECASE[parsed_operator])
+            if formatted is not None:
+                try:
+                    index = _symbol_name(sympy.sympify(formatted[1][0]))
+                except (IndexError, sympy.SympifyError, TypeError):
+                    index = None
+                if parsed_operator == "limit":
+                    return operator, "approach", index
+                limit_count = len(formatted[1])
+                if limit_count == 2:
+                    return operator, "domain", index
+                if limit_count == 3:
+                    return (
+                        operator,
+                        "approach"
+                        if _formatted_direction(formatted[1]) is not None
+                        else "bounds",
+                        index,
+                    )
+                return operator, None, index
             try:
                 value = _decode(raw)
-            except Exception:  # noqa: BLE001 -- malformed author JSON is validated later.
-                return None
-            if isinstance(value, sympy.Limit):
-                return {value: key for key, value in DIRECTIONS.items()}.get(
-                    str(value.args[3])
-                )
-        return None
-    if not isinstance(raw, str):
-        return None
-    function_name = OPERATOR_FUNCTIONS.get(operator)
-    if function_name is None:
-        return None
-    formatted = _formatted_call(raw, function_name)
-    if formatted is None:
+            except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
+                return operator, None, None
+            return operator, _binder_limits(value), _binder_index(value)
+
+        case {"_type": "operator_expression"}:
+            operator = raw.get("operator")
+            limits = raw.get("limits")
+            try:
+                index = _symbol_name(_decode(raw.get("index")))
+            except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
+                index = None
+            if (
+                raw.get("_version") == 1
+                and operator in {*OPS, "custom"}
+                and limits in COMPONENT_MAP
+                and index is not None
+            ):
+                return operator, limits, index
+            return None, None, None
+
+        case {"_type": "sympy"}:
+            try:
+                value = _decode(raw)
+            except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
+                return None, None, None
+
+            for operator in ("sum", "product", "integral", "limit"):
+                if isinstance(value, SYMPY_CONSTRUCTORS[operator]):
+                    return operator, _binder_limits(value), _binder_index(value)
+            return None, None, None
+
+        case _:
+            return None, None, None
+
+
+def _infer_direction(raw: Any, operator: Operator) -> DirectionName | None:
+    def _decode_limit_direction(raw) -> DirectionName | None:
         try:
             value = _decode(raw)
-        except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
+        except Exception:  # noqa: BLE001 -- malformed author JSON is validated later.
             return None
         if isinstance(value, sympy.Limit):
-            return {value: key for key, value in DIRECTIONS.items()}.get(
-                str(value.args[3])
-            )
+            return DIRECTION_NAMES.get(str(value.args[3]))  # type: ignore
         return None
-    if len(formatted[1]) != 3:
-        return None
-    direction = _formatted_direction(formatted[1])
-    if direction is None:
-        return None
-    return {value: key for key, value in DIRECTIONS.items()}.get(direction)
+
+    match raw:
+        case {"_type": "operator_expression"}:
+            direction = raw.get("direction")
+            return direction if direction in DIRECTION_SYMBOLS else None
+
+        case {"_type": "sympy"}:
+            return _decode_limit_direction(raw)
+
+        case str():
+            match _formatted_call(raw, OPERATOR_SNAKECASE[operator]):
+                case None:
+                    return _decode_limit_direction(raw)
+
+                case _, limits if direction := _formatted_direction(limits):
+                    return DIRECTION_NAMES.get(direction)
+
+                case _:
+                    return None
+
+        case _:
+            return None
 
 
-def _config(html: str, data: Any | None = None) -> Config:
+def _config(html: str, data: pl.QuestionData | None = None) -> Config:
     element = lxml.html.fragment_fromstring(html)
     answer = pl.get_string_attrib(element, "answers-name", None)
     if answer is None or not answer.strip():
@@ -372,7 +374,7 @@ def _config(html: str, data: Any | None = None) -> Config:
         raise ValueError(
             'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
         )
-    if operator not in {*OPS, "custom"}:
+    if operator not in OPERATOR_SNAKECASE:
         raise ValueError(f'Unknown operator "{operator}".')
     if operator == "custom":
         if custom_latex is None or not custom_latex.strip():
@@ -425,7 +427,7 @@ def _config(html: str, data: Any | None = None) -> Config:
         )
         or "two-sided"
     )
-    if direction not in DIRECTIONS:
+    if direction not in DIRECTION_SYMBOLS:
         raise ValueError(f'Unknown limit-direction "{direction}".')
     direction_input_attribute = "allow-limit-direction-input" in element.attrib
     if direction_input_attribute and limits != "approach":
@@ -497,9 +499,8 @@ def _config(html: str, data: Any | None = None) -> Config:
 
 
 def _decode(value: Any) -> Any:
-    if isinstance(value, dict) and value.get("_type") == "sympy" and "_value" in value:
-        source = value["_value"]
-        if isinstance(source, str):
+    match value:
+        case {"_type": "sympy", "_value": str(source)}:
             # Canonical leaves are trusted author answers. PrairieLearn's
             # student-input parser cannot round-trip every value emitted by
             # sympy_to_json: binder tuples look like intervals, and Boolean
@@ -513,14 +514,19 @@ def _decode(value: Any) -> Any:
             return sympy.sympify(  # type: ignore[call-overload]
                 source, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
             )
-    if isinstance(value, str):
-        try:
-            return sympy.sympify(  # type: ignore[call-overload]
-                value, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
-            )
-        except (sympy.SympifyError, TypeError) as exc:
-            raise ValueError("The correct answer contains invalid SymPy data.") from exc
-    return value
+
+        case str():
+            try:
+                return sympy.sympify(  # type: ignore[call-overload]
+                    value, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
+                )
+            except (sympy.SympifyError, TypeError) as exc:
+                raise ValueError(
+                    "The correct answer contains invalid SymPy data."
+                ) from exc
+
+        case _:
+            return value
 
 
 def _json(value: sympy.Basic) -> dict[str, Any]:
@@ -624,7 +630,7 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
         body, variable, target, direction = value.args
         if variable != index:
             raise ValueError("Correct answer index does not match index-variable.")
-        public = {v: k for k, v in DIRECTIONS.items()}.get(str(direction))
+        public = {v: k for k, v in DIRECTION_SYMBOLS.items()}.get(str(direction))
         if public != config.direction:
             raise ValueError(
                 "Correct answer Limit direction does not match limit-direction."
@@ -652,7 +658,7 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
 
 
 def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
-    formatted = _formatted_call(source, OPERATOR_FUNCTIONS[config.operator])
+    formatted = _formatted_call(source, OPERATOR_SNAKECASE[config.operator])
     if formatted is None:
         return None
     body_source, limits = formatted
@@ -677,7 +683,7 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
         direction = _formatted_direction(limits)
         if direction is None:
             raise ValueError('Limit direction must be "+", "-", or "+-".')
-        public_direction = {value: key for key, value in DIRECTIONS.items()}.get(
+        public_direction = {value: key for key, value in DIRECTION_SYMBOLS.items()}.get(
             direction
         )
         if public_direction is None:
@@ -749,7 +755,7 @@ def _field(
     component: str,
     label: str,
     size: int,
-    data: dict[str, Any] | pl.QuestionData,
+    data: pl.QuestionData,
     prefix: str | None = None,
     suffix: str | None = None,
     score: float | None = None,
@@ -901,6 +907,8 @@ def _tex(config: Config, raw: dict[str, Any] | None) -> str:
     get = lambda c: raw.get(config.name(c), "?")
     index = sympy.latex(sympy.Symbol(config.index))
     op = config.operator_latex
+    if config.operator == "custom":
+        op = rf"\mathop{{{op}}}\limits"
     if config.limits == "bounds":
         if config.operator == "integral":
             return rf"{op}_{{{get('lower')}}}^{{{get('upper')}}} {get('body')}\,\mathrm{{d}}{index}"
@@ -1009,7 +1017,7 @@ def _component_allows_blank(config: Config, component: Component) -> bool:
 
 
 def _parse_values(
-    config: Config, data: dict[str, Any]
+    config: Config, data: pl.QuestionData
 ) -> dict[str, sympy.Basic] | None:
     submitted = data.setdefault("submitted_answers", {})
     result: dict[str, sympy.Basic] = {}
@@ -1063,7 +1071,7 @@ def _parse_values(
     return result if len(result) == len(config.components) else None
 
 
-def parse(element_html: str, data: dict[str, Any]) -> None:
+def parse(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
     raw = data.get("raw_submitted_answers", {})
@@ -1092,7 +1100,7 @@ def parse(element_html: str, data: dict[str, Any]) -> None:
     if config.limits == "approach" and config.allow_direction_input:
         direction_name = config.name("direction")
         direction = str(raw.get(direction_name, "")).strip()
-        if direction not in DIRECTIONS:
+        if direction not in DIRECTION_SYMBOLS:
             data.setdefault("format_errors", {})[direction_name] = (
                 "Select a valid limit direction."
             )
@@ -1113,7 +1121,9 @@ def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic
 
 
 def _construct(
-    config: Config, values: dict[str, sympy.Basic], direction: str | None = None
+    config: Config,
+    values: dict[str, sympy.Basic],
+    direction: DirectionName | None = None,
 ) -> sympy.Basic:
     index = sympy.Symbol(config.index)
     body = values["body"]
@@ -1126,7 +1136,10 @@ def _construct(
         return bound_constructor(body, (index, values["lower"], values["upper"]))
     if config.limits == "approach":
         return sympy.Limit(
-            body, index, values["target"], dir=DIRECTIONS[direction or config.direction]
+            body,
+            index,
+            values["target"],
+            dir=DIRECTION_SYMBOLS[direction or config.direction],
         )
     domain = values["domain"]
     if config.operator == "integral":
@@ -1149,8 +1162,8 @@ def _equivalent(
     config: Config,
     left_values: dict[str, sympy.Basic],
     right_values: dict[str, sympy.Basic],
-    left_direction: str | None = None,
-    right_direction: str | None = None,
+    left_direction: DirectionName | None = None,
+    right_direction: DirectionName | None = None,
 ) -> bool:
     try:
         left, right = (
