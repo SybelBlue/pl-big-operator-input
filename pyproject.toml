@@ -23,13 +23,3 @@ exclude = ["**/vendor", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
 
 [tool.ruff]
 exclude = ["**/vendor", "scripts/prompts/output"]
-
-[tool.pytest.ini_options]
-addopts = "--strict-markers"
-markers = [
-  "smoke: fast publication-critical lifecycle and documentation contracts",
-  "regression: named bug or compatibility contract",
-  "unit: focused project-owned unit and characterization tests",
-  "vendor_contract: project adapter compatibility with the pinned PrairieLearn snapshot",
-  "browser: DOM/CSS layout or accessibility behavior requiring a browser",
-]

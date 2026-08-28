@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import sympy
+from helpers import RegressionTestSuite, SmokeTestSuite, UnitTestSuite
 
 HERE = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -1028,7 +1029,6 @@ def test_prepare_component_correct_answer_enforces_set_fields():
         )
 
 
-@pytest.mark.regression
 @pytest.mark.parametrize(
     "correct,component",
     [
@@ -1036,13 +1036,12 @@ def test_prepare_component_correct_answer_enforces_set_fields():
         ("Union({k}, (k, 1))", "domain"),
     ],
 )
-def test_whole_set_correct_answer_enforces_set_fields(correct, component):
+def _test_whole_set_correct_answer_enforces_set_fields(correct, component):
     with pytest.raises(ValueError, match=rf'component "{component}" must be a set'):
         mod.prepare(html(operator="union", **{"correct-answer": correct}), data())
 
 
-@pytest.mark.regression
-def test_structured_correct_answer_rejects_disallowed_complex_value():
+def _test_structured_correct_answer_rejects_disallowed_complex_value():
     config = mod._config(html(operator="sum"))
     answer = mod._canonical(
         config, {"lower": sympy.Integer(1), "upper": sympy.Integer(2), "body": sympy.I}
@@ -1051,8 +1050,7 @@ def test_structured_correct_answer_rejects_disallowed_complex_value():
         mod.prepare(html(operator="sum", **{"allow-complex": "false"}), data(answer))
 
 
-@pytest.mark.regression
-def test_structured_correct_answer_rejects_undeclared_symbol():
+def _test_structured_correct_answer_rejects_undeclared_symbol():
     config = mod._config(html(operator="sum"))
     answer = mod._canonical(
         config,
@@ -1158,8 +1156,7 @@ def test_parse_only_relevant_fields_and_allows_index_in_body():
     assert "op-start" not in state["submitted_answers"]
 
 
-@pytest.mark.regression
-def test_component_parse_clears_stale_format_error_after_valid_reparse():
+def _test_component_parse_clears_stale_format_error_after_valid_reparse():
     markup = html(operator="sum")
     state = data(raw={"op-start": "bad@", "op-end": "2", "op-body": "k"})
     mod.parse(markup, state)
@@ -1172,8 +1169,7 @@ def test_component_parse_clears_stale_format_error_after_valid_reparse():
     assert state["submitted_answers"]["op"] is not None
 
 
-@pytest.mark.regression
-def test_invalid_reparse_replaces_previous_partial_score_with_zero():
+def _test_invalid_reparse_replaces_previous_partial_score_with_zero():
     markup = html(operator="sum", **{"correct-answer": "Sum(k, (k, 1, 2))"})
     state = data(raw={"op-start": "1", "op-end": "2", "op-body": "k"})
     mod.prepare(markup, state)
@@ -1188,8 +1184,7 @@ def test_invalid_reparse_replaces_previous_partial_score_with_zero():
     assert state["partial_scores"]["op"] == {"score": 0.0, "weight": 1}
 
 
-@pytest.mark.regression
-def test_component_score_badge_uses_grading_equivalence():
+def _test_component_score_badge_uses_grading_equivalence():
     markup = html(
         operator="sum",
         **{
@@ -1562,8 +1557,7 @@ def test_component_grading_shows_icon_only_badges_on_symbolic_inputs():
 
 
 @pytest.mark.parametrize("grading", ["exact", "equivalent"])
-@pytest.mark.smoke
-def test_exact_and_equivalent_grading(grading):
+def _test_exact_and_equivalent_grading(grading):
     k = sympy.Symbol("k")
     state = data(
         sympy.Sum(k**2, (k, 1, 4)), {"op-start": "1", "op-end": "4", "op-body": "k^2"}
@@ -1575,8 +1569,7 @@ def test_exact_and_equivalent_grading(grading):
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
-@pytest.mark.smoke
-def test_equivalent_grading_domain_sum():
+def _test_equivalent_grading_domain_sum():
     markup = html(
         **{
             "index-variable": None,
@@ -2079,3 +2072,44 @@ def test_annotated_operator_stack_has_vertical_offset(operator):
         ".pl-big-operator-input__annotation math-field::part(virtual-keyboard-toggle)"
         in css
     )
+
+
+class TestCorrectAnswerRegressions(RegressionTestSuite):
+    test_whole_set_correct_answer_enforces_set_fields = staticmethod(
+        _test_whole_set_correct_answer_enforces_set_fields
+    )
+    test_structured_correct_answer_rejects_disallowed_complex_value = staticmethod(
+        _test_structured_correct_answer_rejects_disallowed_complex_value
+    )
+    test_structured_correct_answer_rejects_undeclared_symbol = staticmethod(
+        _test_structured_correct_answer_rejects_undeclared_symbol
+    )
+
+
+class TestLifecycleRegressions(RegressionTestSuite):
+    test_component_parse_clears_stale_format_error_after_valid_reparse = staticmethod(
+        _test_component_parse_clears_stale_format_error_after_valid_reparse
+    )
+    test_invalid_reparse_replaces_previous_partial_score_with_zero = staticmethod(
+        _test_invalid_reparse_replaces_previous_partial_score_with_zero
+    )
+    test_component_score_badge_uses_grading_equivalence = staticmethod(
+        _test_component_score_badge_uses_grading_equivalence
+    )
+
+
+class TestGradingSmoke(SmokeTestSuite):
+    test_exact_and_equivalent_grading = staticmethod(_test_exact_and_equivalent_grading)
+    test_equivalent_grading_domain_sum = staticmethod(
+        _test_equivalent_grading_domain_sum
+    )
+
+
+class TestControllerUnits(UnitTestSuite):
+    """Unit contracts retained from the original controller test module."""
+
+
+# Keep the large historical test inventory reviewable as functions above while
+# exposing every unit contract to pytest through its marker-bearing suite class.
+for _test_name in [name for name in globals() if name.startswith("test_")]:
+    setattr(TestControllerUnits, _test_name, staticmethod(globals().pop(_test_name)))
