@@ -594,12 +594,16 @@ def test_limit_directions(direction, sympy_direction):
     assert 'name="op-direction"' in rendered
     tree = mod.lxml.html.fragment_fromstring(rendered)
     options = tree.xpath('//select[@name="op-direction"]/option')
+    select = tree.xpath('//select[@name="op-direction"]')[0]
     assert [(option.get("value"), option.text) for option in options] == [
         ("", "?"),
         ("two-sided", "±"),
         ("from-right", "+"),
         ("from-left", "−"),
     ]
+    # Native constraint validation must not block Save or Save & Grade. An
+    # empty selection makes a round trip and is rejected by parse() instead.
+    assert "required" not in select.attrib
     assert "pl-big-operator-input__suffix" not in rendered
 
 
@@ -671,6 +675,50 @@ def test_limit_direction_input_is_a_red_single_character_monospace_control():
     assert "font-family: ui-monospace" in css
     assert "color: var(--bs-danger)" in css
     assert "background-image: none" in css
+    direction_rule = css.split(".pl-big-operator-input__direction-input {")[1].split(
+        "}", 1
+    )[0]
+    assert "flex-direction: column" in direction_rule
+
+
+@pytest.mark.parametrize(
+    ("submitted_direction", "badge_class", "icon_class", "label"),
+    [
+        ("from-right", "text-bg-success", "fa-check", "Correct"),
+        ("from-left", "text-bg-danger", "fa-times", "Incorrect"),
+    ],
+)
+def test_limit_direction_input_uses_binary_score_badge(
+    submitted_direction, badge_class, icon_class, label
+):
+    markup = html(
+        operator="limit",
+        **{
+            "grading-method": "component",
+            "correct-answer": "Limit(1/k, (k, 0, '+'))",
+        },
+    )
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": submitted_direction,
+        }
+    )
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+
+    rendered = mod.render(markup, state)
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    badge = tree.xpath(
+        '//span[contains(@class, "pl-big-operator-input__direction-score")]/span'
+    )[0]
+
+    assert badge_class in badge.get("class")
+    assert icon_class in badge.xpath("./i")[0].get("class")
+    assert badge.get("aria-label") == label
+    assert "%" not in badge.text_content()
 
 
 @pytest.mark.parametrize("direction", ["two-sided", "from-left", "from-right"])
