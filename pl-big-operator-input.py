@@ -16,6 +16,10 @@ import sympy.sets
 
 HERE = Path(__file__).parent
 
+BODY_SIZE_DEFAULT = 16
+BOUNDS_LIMIT_SIZE_DEFAULT = 7
+ANNOTATION_LIMIT_SIZE_DEFAULT = 10
+
 type Operator = Literal[
     "sum",
     "product",
@@ -113,6 +117,8 @@ class Config:
     allowed_blank: AllowedBlank
     allow_complex: bool
     show_help_text: bool
+    body_size: int
+    limit_size: int
     grading: str
     body_weight: int
     weight: int
@@ -407,6 +413,17 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         raise ValueError(
             f'Operator "{operator}" does not support limits="{limits}"; use {", ".join(sorted(allowed))}.'
         )
+    body_size = pl.get_integer_attrib(element, "body-size", BODY_SIZE_DEFAULT)
+    if body_size is None or body_size < 1:
+        raise ValueError('Attribute "body-size" must be positive.')
+    default_limit_size = (
+        BOUNDS_LIMIT_SIZE_DEFAULT
+        if limits == "bounds"
+        else ANNOTATION_LIMIT_SIZE_DEFAULT
+    )
+    limit_size = pl.get_integer_attrib(element, "limit-size", default_limit_size)
+    if limit_size is None or limit_size < 1:
+        raise ValueError('Attribute "limit-size" must be positive.')
     grading = (
         pl.get_string_attrib(element, "grading-method", "equivalent") or "equivalent"
     )
@@ -488,6 +505,8 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         cast(AllowedBlank, allowed_blank),
         bool(pl.get_boolean_attrib(element, "allow-complex", False)),
         bool(pl.get_boolean_attrib(element, "show-help-text", True)),
+        body_size,
+        limit_size,
         grading,
         body_weight,
         int(pl.get_integer_attrib(element, "weight", 1) or 1),
@@ -852,11 +871,13 @@ def _question(config: Config, data: pl.QuestionData) -> str:
         "integral": config.operator == "integral",
         "operator_latex": config.operator_latex,
         "index_label": index,
+        "body_size": config.body_size,
+        "limit_size": config.limit_size,
         "body_field": _field(
             config,
             "body",
             "Operator body",
-            16,
+            config.body_size,
             data,
             score=component_scores.get("body"),
         ),
@@ -869,20 +890,25 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             config,
             "lower",
             "Lower bound",
-            7,
+            config.limit_size,
             data,
             None if config.operator == "integral" else rf"\({index} = \)",
             score=component_scores.get("lower"),
         )
         context["upper_field"] = _field(
-            config, "upper", "Upper bound", 7, data, score=component_scores.get("upper")
+            config,
+            "upper",
+            "Upper bound",
+            config.limit_size,
+            data,
+            score=component_scores.get("upper"),
         )
     elif config.limits == "domain":
         context["annotation_field"] = _field(
             config,
             "domain",
             "Integration domain" if config.operator == "integral" else "Index domain",
-            10,
+            config.limit_size,
             data,
             None if config.operator == "integral" else rf"\({index} \in \)",
             score=component_scores.get("domain"),
@@ -902,7 +928,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
             config,
             "target",
             "Approach target",
-            10,
+            config.limit_size,
             data,
             rf"\({index} \to \)",
             rf"\({{}}^{direction_suffix}\)" if direction_suffix else None,
@@ -1059,7 +1085,7 @@ def _parse_values(
                 "target": "Approach target",
                 "body": "Operator body",
             }[component],
-            size=16 if component == "body" else 10,
+            size=config.body_size if component == "body" else config.limit_size,
             allow_sets=_requires_set(config, component),
             allow_complex=config.allow_complex,
         )

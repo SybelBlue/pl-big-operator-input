@@ -1281,6 +1281,95 @@ def test_question_fields_are_rendered_by_vendored_symbolic_input():
     assert rendered.count('title="Symbolic"') == 1
 
 
+@pytest.mark.parametrize(
+    ("operator", "expected_limit_size"),
+    [("sum", 7), ("union", 10), ("limit", 10)],
+)
+def test_symbolic_input_width_defaults_preserve_existing_layout(
+    operator, expected_limit_size
+):
+    config = mod._config(html(operator=operator))
+    rendered = mod.render(html(operator=operator), data())
+
+    assert config.body_size == 16
+    assert config.limit_size == expected_limit_size
+    assert "--pl-big-operator-input-body-size: 16ch" in rendered
+    assert f"--pl-big-operator-input-limit-size: {expected_limit_size}ch" in rendered
+
+
+def test_custom_widths_are_forwarded_to_rendered_symbolic_inputs(monkeypatch):
+    field_markup = []
+    original_render = mod.symbolic_input_adapter.render
+
+    def capture_render(markup, *args, **kwargs):
+        field_markup.append(markup)
+        return original_render(markup, *args, **kwargs)
+
+    monkeypatch.setattr(mod.symbolic_input_adapter, "render", capture_render)
+    markup = html(operator="sum", **{"body-size": "24", "limit-size": "9"})
+    rendered = mod.render(markup, data())
+    sizes = {
+        element.get("answers-name"): element.get("size")
+        for element in map(mod.lxml.html.fragment_fromstring, field_markup)
+    }
+
+    assert sizes == {"op-start": "9", "op-end": "9", "op-body": "24"}
+    assert "--pl-big-operator-input-body-size: 24ch" in rendered
+    assert "--pl-big-operator-input-limit-size: 9ch" in rendered
+
+
+def test_custom_widths_are_forwarded_when_parsing(monkeypatch):
+    field_markup = []
+    original_parse = mod.symbolic_input_adapter.parse
+
+    def capture_parse(markup, *args, **kwargs):
+        field_markup.append(markup)
+        return original_parse(markup, *args, **kwargs)
+
+    monkeypatch.setattr(mod.symbolic_input_adapter, "parse", capture_parse)
+    markup = html(operator="sum", **{"body-size": "24", "limit-size": "9"})
+    mod.parse(markup, data(raw={"op-start": "1", "op-end": "4", "op-body": "k^2"}))
+    sizes = {
+        element.get("answers-name"): element.get("size")
+        for element in map(mod.lxml.html.fragment_fromstring, field_markup)
+    }
+
+    assert sizes == {"op-start": "9", "op-end": "9", "op-body": "24"}
+
+
+@pytest.mark.parametrize("attribute", ["body-size", "limit-size"])
+def test_symbolic_input_width_schema_accepts_integers(attribute):
+    markup = html(operator="sum", **{attribute: "12"})
+    mod.pl.validate_element(
+        mod.lxml.html.fragment_fromstring(markup),
+        HERE / "pl-big-operator-input.schema.json",
+    )
+
+
+@pytest.mark.parametrize("attribute", ["body-size", "limit-size"])
+def test_symbolic_input_width_schema_rejects_non_integers(attribute):
+    markup = html(operator="sum", **{attribute: "wide"})
+    with pytest.raises(ValueError):
+        mod.pl.validate_element(
+            mod.lxml.html.fragment_fromstring(markup),
+            HERE / "pl-big-operator-input.schema.json",
+        )
+
+
+@pytest.mark.parametrize("attribute", ["body-size", "limit-size"])
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_symbolic_input_widths_must_be_positive(attribute, value):
+    with pytest.raises(ValueError, match=f'Attribute "{attribute}" must be positive'):
+        mod._config(html(operator="sum", **{attribute: value}))
+
+
+def test_symbolic_input_width_css_uses_wrapper_properties():
+    css = (HERE / "pl-big-operator-input.css").read_text()
+
+    assert "min-width: var(--pl-big-operator-input-body-size)" in css
+    assert css.count("min-width: var(--pl-big-operator-input-limit-size)") == 2
+
+
 def test_body_help_text_can_be_disabled():
     rendered = mod.render(html(operator="sum", **{"show-help-text": "false"}), data())
 
