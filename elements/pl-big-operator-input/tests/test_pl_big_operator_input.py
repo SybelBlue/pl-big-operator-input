@@ -592,10 +592,14 @@ def test_limit_directions(direction, sympy_direction):
     assert 'name="op-target"' in rendered and 'name="op-body"' in rendered
     assert "Approach target" in rendered and "Operator body" in rendered
     assert 'name="op-direction"' in rendered
-    assert '<option value="">?</option>' in rendered
-    assert '<option value="two-sided"> </option>' in rendered
-    assert '<option value="from-right">+</option>' in rendered
-    assert '<option value="from-left">-</option>' in rendered
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    options = tree.xpath('//select[@name="op-direction"]/option')
+    assert [(option.get("value"), option.text) for option in options] == [
+        ("", "?"),
+        ("two-sided", " "),
+        ("from-right", "+"),
+        ("from-left", "-"),
+    ]
     assert "pl-big-operator-input__suffix" not in rendered
 
 
@@ -647,8 +651,9 @@ def test_limit_direction_input_preserves_raw_selection():
     rendered = mod.render(
         html(operator="limit"), data(raw={"op-direction": "from-right"})
     )
-    assert '<option value="from-right" selected>' in rendered
-    assert '<option value="from-left" selected>' not in rendered
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    selected = tree.xpath('//select[@name="op-direction"]/option[@selected]')
+    assert [option.get("value") for option in selected] == ["from-right"]
 
 
 def test_limit_direction_input_is_a_red_single_character_monospace_control():
