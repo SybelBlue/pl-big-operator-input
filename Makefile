@@ -15,7 +15,7 @@ DOCKER_JOBS_DIR ?= $(shell mktemp -d /tmp/pl-docker-jobs.XXXXXX)
 
 export DOCKER_JOBS_DIR
 
-.PHONY: clean deps venv test typecheck format-py format-json format-html format check-format check-pl-schemas update-prairielearn-pin check-prairielearn-pin ci-dryrun fetch-pl-schemas dev docker
+.PHONY: clean deps venv test test-smoke test-regression test-unit test-publication typecheck format-py format-json format-html format check-format check-pl-schemas update-prairielearn-pin check-prairielearn-pin ci-dryrun fetch-pl-schemas dev docker
 
 # install deps, RUN ME FIRST
 # requires pnpm and uv to be installed on the commandline
@@ -33,6 +33,18 @@ fetch-pl-schemas:
 # testing and validation
 test:
 	uv run --active pytest $(LIB_TEST_PATHS) $(SCRIPT_TEST_PATHS) $(PYTEST_ARGS)
+
+test-smoke:
+	uv run --active pytest -m smoke $(LIB_TEST_PATHS) $(PYTEST_ARGS)
+
+test-regression:
+	uv run --active pytest -m regression $(LIB_TEST_PATHS) $(PYTEST_ARGS)
+
+test-unit:
+	uv run --active pytest -m unit $(LIB_TEST_PATHS) $(SCRIPT_TEST_PATHS) $(PYTEST_ARGS)
+
+test-publication: test typecheck check-format check-pl-schemas
+	git diff --check
 
 typecheck:
 	uv run --active pyright
