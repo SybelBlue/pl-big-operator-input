@@ -1,0 +1,20 @@
+{{! htmlmustache-disable pl-prefer-pl-inputs }}
+<div class="pl-big-operator-input__direction-input">
+  <label class="visually-hidden" for="{{ name }}">Limit direction</label>
+  <select
+    class="form-select form-select-sm{{#invalid}} is-invalid{{/invalid}}"
+    id="{{ name }}"
+    name="{{ name }}"
+    aria-label="Limit direction"
+    required
+  >
+    <option value="">?</option>
+    {{#options}}
+      <option value="{{ value }}" {{#selected}} selected{{/selected}}>{{ label }}</option>
+    {{/options}}
+  </select>
+  {{#feedback}}<span class="invalid-feedback d-block">{{ feedback }}</span>{{/feedback}}
+  {{#score_badge}}
+    <span class="pl-big-operator-input__direction-score">{{> score-badge }}</span>
+  {{/score_badge}}
+</div>

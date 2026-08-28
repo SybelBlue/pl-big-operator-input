@@ -41,6 +41,37 @@
   flex-wrap: nowrap;
 }
 
+.pl-big-operator-input__direction-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+.pl-big-operator-input__direction-input .form-select {
+  box-sizing: content-box;
+  width: 1ch;
+  min-width: 1ch;
+  padding: 0.25rem;
+  color: var(--bs-danger);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  text-align: center;
+  background-image: none;
+  appearance: none;
+}
+
+.pl-big-operator-input__direction-input .form-select:valid {
+  color: var(--bs-body-color);
+}
+
+.pl-big-operator-input__direction-input .form-select option {
+  color: var(--bs-body-color);
+}
+
+.pl-big-operator-input__direction-score {
+  display: inline-flex;
+}
+
 .pl-big-operator-input__operator-stack--integral {
   flex-direction: row;
   align-items: center;
