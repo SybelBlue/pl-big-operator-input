@@ -123,7 +123,7 @@ def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
     assert state["correct_answers"]["op"]["limits"] == limits
     assert mod._config(markup, state).index == "k"
     assert mod._config(markup, state).operator == operator
-    assert mod.OPERATOR_TEX[operator] in mod.render(markup, state)
+    assert mod.OP_METADATA[operator].tex in mod.render(markup, state)
 
 
 @pytest.mark.parametrize(

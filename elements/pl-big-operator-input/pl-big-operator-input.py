@@ -44,43 +44,62 @@ type OperatorFn = Literal[
     "Max",
     "Custom",
 ]
-OPERATOR_FNS: dict[Operator, OperatorFn] = {
-    "sum": "Sum",
-    "product": "Product",
-    "integral": "Integral",
-    "limit": "Limit",
-    "union": "Union",
-    "intersection": "Intersection",
-    "disjoint-union": "DisjointUnion",
-    "min": "Min",
-    "max": "Max",
-    "custom": "Custom",
-}
-OPS: set[Operator] = set(OPERATOR_FNS.keys())
-OP_FNS: set[OperatorFn] = set(OPERATOR_FNS.values())
+type LimitFormat = Literal["bounds", "domain", "approach"]
 
-OPERATOR_TEX: dict[BuiltinOperator, str] = {
-    "sum": r"\sum",
-    "product": r"\prod",
-    "integral": r"\int",
-    "limit": r"\lim",
-    "union": r"\bigcup",
-    "intersection": r"\bigcap",
-    "disjoint-union": r"\bigsqcup",
-    "min": r"\min",
-    "max": r"\max",
+
+@dataclass(frozen=True, slots=True)
+class OperatorMetadata:
+    fn_name: OperatorFn
+    tex: str
+    default_limit: LimitFormat
+    valid_limits: frozenset[LimitFormat]
+    bounds_constructor: type[sympy.Basic]
+    _domain_constructor: type[sympy.Basic] | None = None
+
+    def __post_init__(self):
+        assert self.default_limit in self.valid_limits
+
+    @property
+    def domain_constructor(self) -> type[sympy.Basic]:
+        return self._domain_constructor or self.bounds_constructor
+
+
+_BOUNDS_DOMAIN = frozenset(("bounds", "domain"))
+OP_METADATA: dict[BuiltinOperator, OperatorMetadata] = {
+    "sum": OperatorMetadata(
+        "Sum", r"\sum", "bounds", _BOUNDS_DOMAIN, sympy.Sum, sympy.Add
+    ),
+    "product": OperatorMetadata(
+        "Product", r"\prod", "bounds", _BOUNDS_DOMAIN, sympy.Product, sympy.Mul
+    ),
+    "integral": OperatorMetadata(
+        "Integral", r"\int", "bounds", _BOUNDS_DOMAIN, sympy.Integral
+    ),
+    "limit": OperatorMetadata(
+        "Limit", r"\lim", "approach", frozenset(("approach",)), sympy.Limit
+    ),
+    "union": OperatorMetadata(
+        "Union", r"\bigcup", "domain", _BOUNDS_DOMAIN, sympy.Union
+    ),
+    "intersection": OperatorMetadata(
+        "Intersection", r"\bigcap", "domain", _BOUNDS_DOMAIN, sympy.Intersection
+    ),
+    "disjoint-union": OperatorMetadata(
+        "DisjointUnion",
+        r"\bigsqcup",
+        "domain",
+        _BOUNDS_DOMAIN,
+        sympy.sets.DisjointUnion,
+    ),
+    "min": OperatorMetadata("Min", r"\min", "domain", _BOUNDS_DOMAIN, sympy.Min),
+    "max": OperatorMetadata("Max", r"\max", "domain", _BOUNDS_DOMAIN, sympy.Max),
 }
-OPERATOR_LIMITS: dict[BuiltinOperator, tuple[LimitFormat, set[LimitFormat]]] = {
-    "sum": ("bounds", {"bounds", "domain"}),
-    "product": ("bounds", {"bounds", "domain"}),
-    "integral": ("bounds", {"bounds", "domain"}),
-    "limit": ("approach", {"approach"}),
-    "union": ("domain", {"bounds", "domain"}),
-    "intersection": ("domain", {"bounds", "domain"}),
-    "disjoint-union": ("domain", {"bounds", "domain"}),
-    "min": ("domain", {"bounds", "domain"}),
-    "max": ("domain", {"bounds", "domain"}),
-}
+
+
+def _operator_fn_name(operator: Operator) -> OperatorFn:
+    return "Custom" if operator == "custom" else OP_METADATA[operator].fn_name
+
+
 type DirectionName = Literal["two-sided", "from-left", "from-right"]
 type DirectionSymbol = Literal["+-", "-", "+"]
 DIRECTION_SYMBOLS: dict[DirectionName, DirectionSymbol] = {
@@ -91,24 +110,6 @@ DIRECTION_SYMBOLS: dict[DirectionName, DirectionSymbol] = {
 DIRECTION_NAMES: dict[DirectionSymbol, DirectionName] = {
     symbol: name for name, symbol in DIRECTION_SYMBOLS.items()
 }
-SYMPY_BOUNDS_CONSTRUCTORS: dict[Operator, type[sympy.Basic]] = {
-    "sum": sympy.Sum,
-    "product": sympy.Product,
-    "integral": sympy.Integral,
-    "union": sympy.Union,
-    "intersection": sympy.Intersection,
-    "disjoint-union": sympy.sets.DisjointUnion,
-    "min": sympy.Min,
-    "max": sympy.Max,
-    "limit": sympy.Limit,
-    "custom": sympy.Tuple,
-}
-SYMPY_DOMAIN_CONSTRUCTORS: dict[Operator, type[sympy.Basic]] = {
-    **SYMPY_BOUNDS_CONSTRUCTORS,
-    "sum": sympy.Add,
-    "product": sympy.Mul,
-}
-type LimitFormat = Literal["bounds", "domain", "approach"]
 type FormattedCall = tuple[str, tuple[str, ...]]
 type Component = Literal["lower", "upper", "domain", "target", "body"]
 type ResponseComponent = Literal["direction"] | Component
@@ -299,14 +300,22 @@ def _infer_spec(
         case str():
             regex_match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
             function = regex_match.group(1) if regex_match else None
-            parsed_operator: Operator | None = next(
-                (key for key, value in OPERATOR_FNS.items() if value == function),
-                None,
+            parsed_operator: Operator | None = (
+                "custom"
+                if function == "Custom"
+                else next(
+                    (
+                        operator
+                        for operator, metadata in OP_METADATA.items()
+                        if metadata.fn_name == function
+                    ),
+                    None,
+                )
             )
             if parsed_operator is None:
                 return None, None, None
             operator = parsed_operator
-            formatted = _formatted_call(raw, OPERATOR_FNS[parsed_operator])
+            formatted = _formatted_call(raw, _operator_fn_name(parsed_operator))
             if formatted is None and parsed_operator == "limit":
                 formatted = _legacy_limit_call(raw)
             if formatted is not None:
@@ -341,7 +350,7 @@ def _infer_spec(
                 index = None
             if (
                 raw.get("_version") == 1
-                and operator in OPS
+                and (operator == "custom" or operator in OP_METADATA)
                 and limits in COMPONENTS_MAP
                 and index is not None
             ):
@@ -355,7 +364,7 @@ def _infer_spec(
                 return None, None, None
 
             for operator in ("sum", "product", "integral", "limit"):
-                if isinstance(value, SYMPY_BOUNDS_CONSTRUCTORS[operator]):
+                if isinstance(value, OP_METADATA[operator].bounds_constructor):
                     return operator, _binder_limits(value), _binder_index(value)
             return None, None, None
 
@@ -382,7 +391,7 @@ def _infer_direction(raw: Any, operator: Operator) -> DirectionName | None:
             return _decode_limit_direction(raw)
 
         case str():
-            formatted = _formatted_call(raw, OPERATOR_FNS[operator])
+            formatted = _formatted_call(raw, _operator_fn_name(operator))
             if formatted is None and operator == "limit":
                 formatted = _legacy_limit_call(raw)
             match formatted:
@@ -451,7 +460,7 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         raise ValueError(
             'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
         )
-    if operator not in OPERATOR_FNS:
+    if operator != "custom" and operator not in OP_METADATA:
         raise ValueError(f'Unknown operator "{operator}".')
     if operator == "custom":
         if custom_latex is None or not custom_latex.strip():
@@ -460,26 +469,26 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
             )
         operator_latex = custom_latex.strip()
     else:
+        metadata = OP_METADATA[operator]
         operator_latex = (
-            custom_latex.strip() if custom_latex is not None else OPERATOR_TEX[operator]
+            custom_latex.strip() if custom_latex is not None else metadata.tex
         )
-    operator_limits = None if operator == "custom" else OPERATOR_LIMITS[operator]
     limits: LimitFormat | Literal["auto"] | str = (
         pl.get_string_attrib(element, "limits", "auto") or "auto"
     )
     if limits == "auto":
         if inferred_operator == operator and inferred_limits:
             limits = inferred_limits
-        elif operator_limits is None:
+        elif operator == "custom":
             raise ValueError(
                 'Custom operators require a parseable whole correct answer or explicit limits="bounds", limits="domain", or limits="approach".'
             )
         else:
-            limits = operator_limits[0]
-    allowed: set[LimitFormat] = (
-        {"bounds", "domain", "approach"}
-        if operator_limits is None
-        else operator_limits[1]
+            limits = OP_METADATA[operator].default_limit
+    allowed = (
+        frozenset(("bounds", "domain", "approach"))
+        if operator == "custom"
+        else OP_METADATA[operator].valid_limits
     )
     if limits not in allowed:
         raise ValueError(
@@ -793,7 +802,7 @@ def _binder(config: Config, value: Any) -> dict[str, Any] | None:
 
 
 def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
-    formatted = _formatted_call(source, OPERATOR_FNS[config.operator])
+    formatted = _formatted_call(source, _operator_fn_name(config.operator))
     if formatted is None and config.operator == "limit":
         formatted = _legacy_limit_call(source)
     if formatted is None:
@@ -1333,12 +1342,10 @@ def _construct(
     index = sympy.Symbol(config.index)
     body = values["body"]
     match config.limits, config.operator:
+        case "bounds", "custom":
+            return sympy.Tuple(body, (index, values["lower"], values["upper"]))
         case "bounds", operator:
-            bound_constructor = SYMPY_BOUNDS_CONSTRUCTORS.get(operator)
-            if bound_constructor is None:
-                raise NotImplementedError(
-                    f"Equivalent grading for bounded {operator} is unsupported."
-                )
+            bound_constructor = OP_METADATA[operator].bounds_constructor
             return bound_constructor(body, (index, values["lower"], values["upper"]))
         case "approach", _:
             return sympy.Limit(
@@ -1361,7 +1368,9 @@ def _construct(
                 body.subs(index, item)
                 for item in domain  # type: ignore
             ]
-            return SYMPY_DOMAIN_CONSTRUCTORS[operator](*terms)
+            if operator == "custom":
+                return sympy.Tuple(*terms)
+            return OP_METADATA[operator].domain_constructor(*terms)
 
 
 def _equivalent(
