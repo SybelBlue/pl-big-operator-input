@@ -1165,6 +1165,13 @@ def _equivalent(
             _construct(config, left_values, left_direction),
             _construct(config, right_values, right_direction),
         )
+        return _expressions_equivalent(left, right)
+    except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def _expressions_equivalent(left: sympy.Basic, right: sympy.Basic) -> bool:
+    try:
         if left == right:
             return True
         left, right = left.doit(), right.doit()
@@ -1172,7 +1179,7 @@ def _equivalent(
             return True
         difference = sympy.simplify(sympy.expand(cast(Any, left) - cast(Any, right)))
         return difference == 0 or difference.equals(0) is True
-    except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
+    except (TypeError, ValueError, ZeroDivisionError):
         return False
 
 
@@ -1200,7 +1207,7 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
             earned = sum(
                 w
                 for c, w in zip(config.components, weights)
-                if submitted[c] == correct[c]
+                if _expressions_equivalent(submitted[c], correct[c])
             )
             if config.limits == "approach" and config.allow_direction_input:
                 weights.append(1)
