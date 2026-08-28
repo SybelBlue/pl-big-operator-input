@@ -32,8 +32,6 @@ OPS = {
     "union": (r"\bigcup", "domain"),
     "intersection": (r"\bigcap", "domain"),
     "disjoint-union": (r"\bigsqcup", "domain"),
-    "and": (r"\bigwedge", "domain"),
-    "or": (r"\bigvee", "domain"),
     "min": (r"\min", "domain"),
     "max": (r"\max", "domain"),
 }
@@ -44,8 +42,6 @@ FLEXIBLE = {
     "union",
     "intersection",
     "disjoint-union",
-    "and",
-    "or",
     "min",
     "max",
 }
@@ -57,8 +53,6 @@ SYMPY_CONSTRUCTORS: dict[str, type[sympy.Basic]] = {
     "union": sympy.Union,
     "intersection": sympy.Intersection,
     "disjoint-union": sympy.sets.DisjointUnion,
-    "and": sympy.And,
-    "or": sympy.Or,
     "min": sympy.Min,
     "max": sympy.Max,
 }
@@ -66,8 +60,6 @@ FUNCTION_BINDERS = {
     "union": "Union",
     "intersection": "Intersection",
     "disjoint-union": "DisjointUnion",
-    "and": "And",
-    "or": "Or",
     "min": "Min",
     "max": "Max",
 }
