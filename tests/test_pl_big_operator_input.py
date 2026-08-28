@@ -627,6 +627,21 @@ def test_limit_direction_input_defaults_true_and_can_be_disabled():
     assert "−" in rendered
 
 
+def test_fixed_two_sided_limit_has_no_target_suffix():
+    markup = html(
+        operator="limit",
+        **{
+            "limit-direction": "two-sided",
+            "allow-limit-direction-input": "false",
+        },
+    )
+
+    rendered = mod.render(markup, data())
+
+    assert 'name="op-direction"' not in rendered
+    assert 'id="pl-symbolic-input-op-target-suffix"' not in rendered
+
+
 @pytest.mark.parametrize("value", ["true", "false"])
 def test_limit_direction_input_schema_values_are_valid(value):
     markup = html(operator="limit", **{"allow-limit-direction-input": value})
