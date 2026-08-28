@@ -67,7 +67,7 @@ Lastly, `approach` forms colect a target bound and a body.
 The element displays and parses only the inputs required by the selected form.
 
 Approach forms show a required limit-direction selector by default. Its red `?`
-prompt requires the student to deliberately choose a blank (two-sided), `-`
+prompt requires the student to deliberately choose `±` (two-sided), `−`
 (from-left), or `+` (from-right); it never reveals the correct direction. Set
 `allow-limit-direction-input="false"` to render `limit-direction` as fixed
 notation instead. The attribute is invalid on non-approach forms.

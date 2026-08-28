@@ -596,9 +596,9 @@ def test_limit_directions(direction, sympy_direction):
     options = tree.xpath('//select[@name="op-direction"]/option')
     assert [(option.get("value"), option.text) for option in options] == [
         ("", "?"),
-        ("two-sided", " "),
+        ("two-sided", "±"),
         ("from-right", "+"),
-        ("from-left", "-"),
+        ("from-left", "−"),
     ]
     assert "pl-big-operator-input__suffix" not in rendered
 
@@ -656,6 +656,15 @@ def test_limit_direction_input_preserves_raw_selection():
     assert [option.get("value") for option in selected] == ["from-right"]
 
 
+def test_limit_direction_input_two_sided_option_has_accessible_text():
+    rendered = mod.render(html(operator="limit"), data())
+    tree = mod.lxml.html.fragment_fromstring(rendered)
+    options = tree.xpath('//select[@name="op-direction"]/option[@value="two-sided"]')
+
+    assert len(options) == 1
+    assert options[0].text_content().strip() == "±"
+
+
 def test_limit_direction_input_is_a_red_single_character_monospace_control():
     css = (HERE / "pl-big-operator-input.css").read_text()
     assert "width: 1ch" in css
@@ -695,11 +704,49 @@ def test_limit_direction_input_rejects_missing_or_invalid_selection(direction):
     assert "Select a valid limit direction." in rendered
 
 
+def test_limit_direction_input_clears_stale_format_error_after_valid_selection():
+    markup = html(operator="limit")
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "sideways",
+        }
+    )
+    mod.parse(markup, state)
+    assert "op-direction" in state["format_errors"]
+
+    state["raw_submitted_answers"]["op-direction"] = "from-right"
+    mod.parse(markup, state)
+
+    assert "op-direction" not in state.get("format_errors", {})
+    assert "is-invalid" not in mod.render(markup, state)
+
+
 def test_limit_direction_input_honors_allowed_blank_limits():
     state = data(raw={"op-target": "0", "op-body": "1/k", "op-direction": ""})
     mod.parse(html(operator="limit", **{"allowed-blank": "limits"}), state)
     assert state["submitted_answers"]["op"] == ""
     assert "op-direction" not in state.get("format_errors", {})
+
+
+def test_limit_direction_input_clears_stale_submission_when_blank_is_allowed():
+    markup = html(operator="limit", **{"allowed-blank": "limits"})
+    state = data(
+        raw={
+            "op-target": "0",
+            "op-body": "1/k",
+            "op-direction": "from-right",
+        }
+    )
+    mod.parse(markup, state)
+    assert state["submitted_answers"]["op-direction"] == "from-right"
+
+    state["raw_submitted_answers"]["op-direction"] = ""
+    mod.parse(markup, state)
+
+    assert state["submitted_answers"]["op"] == ""
+    assert state["submitted_answers"]["op-direction"] == ""
 
 
 def test_fixed_limit_direction_is_injected_without_raw_field():

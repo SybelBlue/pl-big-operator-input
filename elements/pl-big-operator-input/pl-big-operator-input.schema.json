@@ -65,7 +65,12 @@
     "allowed-blank": {
       "description": "Which portions of the response may be blank: none, limits, body, or all.",
       "default": "none",
-      "enum": ["none", "limits", "body", "all"]
+      "enum": [
+        "none",
+        "limits",
+        "body",
+        "all"
+      ]
     },
     "allow-complex": {
       "description": "Whether complex numbers and the imaginary unit are allowed in symbolic component inputs.",
@@ -149,7 +154,11 @@
               ]
             },
             "limits": {
-              "enum": ["auto", "bounds", "domain"]
+              "enum": [
+                "auto",
+                "bounds",
+                "domain"
+              ]
             }
           },
           "required": ["operator"]
@@ -160,7 +169,10 @@
               "const": "limit"
             },
             "limits": {
-              "enum": ["auto", "approach"]
+              "enum": [
+                "auto",
+                "approach"
+              ]
             }
           },
           "required": ["operator"]
@@ -171,7 +183,10 @@
               "const": "custom"
             }
           },
-          "required": ["operator", "operator-latex"]
+          "required": [
+            "operator",
+            "operator-latex"
+          ]
         }
       ]
     },
@@ -180,16 +195,39 @@
         {
           "not": {
             "anyOf": [
-              {"required": ["correct-answer-start"]},
-              {"required": ["correct-answer-end"]},
-              {"required": ["correct-answer-domain"]},
-              {"required": ["correct-answer-target"]},
-              {"required": ["correct-answer-body"]}
+              {
+                "required": [
+                  "correct-answer-start"
+                ]
+              },
+              {
+                "required": [
+                  "correct-answer-end"
+                ]
+              },
+              {
+                "required": [
+                  "correct-answer-domain"
+                ]
+              },
+              {
+                "required": [
+                  "correct-answer-target"
+                ]
+              },
+              {
+                "required": [
+                  "correct-answer-body"
+                ]
+              }
             ]
           }
         },
         {
-          "required": ["operator", "index-variable"]
+          "required": [
+            "operator",
+            "index-variable"
+          ]
         }
       ]
     }
