@@ -171,7 +171,6 @@ the direction from an initially unanswered `?` control:
 <pl-big-operator-input
   answers-name="sinc-limit"
   correct-answer="Limit(sin(x) / x, (x, 0, '+-'))"
-  index-variable="x"
 ></pl-big-operator-input>
 ```
 
