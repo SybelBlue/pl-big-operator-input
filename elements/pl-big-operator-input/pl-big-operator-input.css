@@ -43,6 +43,7 @@
 
 .pl-big-operator-input__direction-input {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.25rem;
   margin-left: 0.25rem;
