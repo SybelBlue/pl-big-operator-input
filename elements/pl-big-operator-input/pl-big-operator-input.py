@@ -498,7 +498,13 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
     )
 
 
-def _decode(value: Any) -> Any:
+def _decode(value: Any, variables: tuple[str, ...] = ()) -> Any:
+    local_symbols = {name: sympy.Symbol(name) for name in variables}
+    locals = {
+        "_Exp1": sympy.E,
+        "_ImaginaryUnit": sympy.I,
+        **local_symbols,
+    }
     match value:
         case {"_type": "sympy", "_value": str(source)}:
             # Canonical leaves are trusted author answers. PrairieLearn's
@@ -512,13 +518,13 @@ def _decode(value: Any) -> Any:
             ):
                 return psu.json_to_sympy(cast(Any, value), allow_sets=True)
             return sympy.sympify(  # type: ignore[call-overload]
-                source, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
+                source, locals=locals
             )
 
         case str():
             try:
                 return sympy.sympify(  # type: ignore[call-overload]
-                    value, locals={"_Exp1": sympy.E, "_ImaginaryUnit": sympy.I}
+                    value, locals=locals
                 )
             except (sympy.SympifyError, TypeError) as exc:
                 raise ValueError(
@@ -577,9 +583,17 @@ def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
         )
     if config.limits == "approach" and value["direction"] != config.direction:
         raise ValueError("Correct answer direction does not match limit-direction.")
-    if _decode(value["index"]) != sympy.Symbol(config.index):
+    if _decode(value["index"], (config.index,)) != sympy.Symbol(config.index):
         raise ValueError("Correct answer index does not match index-variable.")
-    values = {key: _decode(value[key]) for key in config.components}
+    values = {
+        key: _decode(
+            value[key],
+            tuple(dict.fromkeys((*config.variables, config.index)))
+            if key == "body"
+            else config.variables,
+        )
+        for key in config.components
+    }
     if not all(isinstance(item, sympy.Basic) for item in values.values()):
         raise ValueError(
             "Every mathematical component must be PrairieLearn SymPy JSON."
@@ -600,7 +614,7 @@ def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, 
             parsed = (
                 _parse(raw, variables, config.custom_functions)
                 if isinstance(raw, str)
-                else _decode(raw)
+                else _decode(raw, variables)
             )
         except Exception as exc:
             raise ValueError(
@@ -734,7 +748,7 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
         converted = _formatted_answer(config, raw)
         if converted is not None:
             return converted
-    value = _decode(raw)
+    value = _decode(raw, tuple(dict.fromkeys((*config.variables, config.index))))
     converted = _binder(config, value)
     if converted is not None:
         return converted
@@ -1116,7 +1130,16 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
 
 def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic]:
     return {
-        key: cast(sympy.Basic, _decode(structured[key])) for key in config.components
+        key: cast(
+            sympy.Basic,
+            _decode(
+                structured[key],
+                tuple(dict.fromkeys((*config.variables, config.index)))
+                if key == "body"
+                else config.variables,
+            ),
+        )
+        for key in config.components
     }
 
 

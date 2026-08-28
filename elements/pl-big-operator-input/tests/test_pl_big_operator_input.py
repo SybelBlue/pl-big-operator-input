@@ -1408,6 +1408,28 @@ def test_equivalent_grading_domain_sum():
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
+def test_symbolic_domain_named_like_sympy_function_renders_as_a_symbol():
+    markup = html(
+        **{
+            "index-variable": None,
+            "correct-answer": "Sum(k**-2, (k, N))",
+            "variables": "N",
+            "grading-method": "exact",
+        }
+    )
+    state = data(raw={"op-domain": "N", "op-body": "k^-2"})
+
+    mod.prepare(markup, state)
+    mod.parse(markup, state)
+    mod.grade(markup, state)
+    state["panel"] = "answer"
+    rendered = mod.render(markup, state)
+
+    assert r"\sum_{k\in N} \frac{1}{k^{2}}" in rendered
+    assert "&lt;function N at" not in rendered
+    assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
+
+
 def test_allowed_blank_and_independent_parse_errors():
     blank = data(raw={"op-start": "", "op-end": "", "op-body": ""})
     mod.parse(html(operator="sum", **{"allowed-blank": "all"}), blank)

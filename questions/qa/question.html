@@ -35,6 +35,21 @@
         </td>
       </tr>
       <tr>
+        <td colspan="2">Domain sum <small> <code>grading-method="exact"</code></small></td>
+      </tr>
+      <tr>
+        <td>$\displaystyle \sum_{k\in N} \frac1{k^2}$</td>
+        <td>
+          <pl-big-operator-input
+            answers-name="domain-sum"
+            correct-answer="Sum(k**-2, (k, N))"
+            variables="N"
+            grading-method="exact"
+            allowed-blank="all"
+          ></pl-big-operator-input>
+        </td>
+      </tr>
+      <tr>
         <td colspan="2">Bounded product <small></small></td>
       </tr>
       <tr>
@@ -61,7 +76,7 @@
         </td>
       </tr>
       <tr>
-        <td colspan="2">Domain integral <small> <code>grading-method="exact"</code></small></td>
+        <td colspan="2">Domain integral <small> <code>grading-method="component"</code></small></td>
       </tr>
       <tr>
         <td>$\displaystyle \int_{\Gamma} z\,dz$</td>
@@ -70,7 +85,7 @@
             answers-name="contour"
             correct-answer="Integral(z, (z, Gamma))"
             variables="Gamma"
-            grading-method="exact"
+            grading-method="component"
             allowed-blank="all"
           ></pl-big-operator-input>
         </td>
