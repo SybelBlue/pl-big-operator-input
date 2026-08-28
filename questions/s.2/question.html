@@ -1,9 +1,12 @@
 <pl-question-panel>
-  <p>Fill in the blanks to reproduce the following sum:</p>
-  <p>\[\displaystyle \sum_{k=0}^{8} (-1)^k\]</p>
+  <p>Fill in the blanks to reproduce the following indexed intersection:</p>
 </pl-question-panel>
-<pl-big-operator-input
-  answers-name="sum"
-  index-variable="k"
-  correct-answer="Sum((-1)**k, (k, 0, 8))"
-></pl-big-operator-input>
+<div class="d-flex align-items-center justify-content-center gap-3">
+  <span>\(\displaystyle \bigcap_{k \in \{0,1,2,3\}} \{k,k+1\}\)</span>
+  <span>\(\Longrightarrow\)</span>
+  <pl-big-operator-input
+    answers-name="intersection"
+    correct-answer="Intersection({k, k + 1}, (k, {0, 1, 2, 3}))"
+    grading-method="exact"
+  ></pl-big-operator-input>
+</div>

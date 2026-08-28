@@ -1,8 +1,8 @@
 {
   "uuid": "39b65181-d0ed-4984-9bf0-d61b0ca4c63c",
-  "title": "Enter a symmetric definite integral",
+  "title": "Enter a randomized finite product",
   "topic": "Basic arithmetic",
-  "singleVariant": true,
+  "singleVariant": false,
   "type": "v3",
   "tags": ["Under Construction!"],
   "sharePublicly": false

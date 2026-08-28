@@ -1,9 +1,12 @@
-import prairielearn.sympy_utils as psu
+import random
+
 import sympy
 
 
 def generate(data):
     x = sympy.Symbol("x")
-    data["correct_answers"]["integral"] = psu.sympy_to_json(
-        sympy.Integral(x**3, (x, 0, 2))  # type: ignore
-    )
+    exponent = random.randint(2, 5)
+    upper = random.randint(2, 6)
+    answer = sympy.Sum(x**exponent, (x, 0, upper))
+    data["params"]["answer_latex"] = sympy.latex(answer)
+    data["correct_answers"]["sum"] = str(answer)

@@ -1,9 +1,13 @@
-import prairielearn.sympy_utils as psu
+import random
+
+import prairielearn as pl
 import sympy
 
 
 def generate(data):
     t = sympy.Symbol("t")
-    data["correct_answers"]["integral"] = psu.sympy_to_json(
-        sympy.Integral(t**2 + 1, (t, -1, 1))
-    )
+    radius = random.randint(1, 5)
+    constant = random.randint(1, 6)
+    answer = sympy.Product(t**2 + constant, (t, -radius, radius))  # type: ignore
+    data["params"]["answer_latex"] = sympy.latex(answer)
+    data["correct_answers"]["product"] = pl.to_json(answer)

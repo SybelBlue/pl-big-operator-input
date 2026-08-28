@@ -6,8 +6,7 @@
       "type": "string"
     },
     "operator": {
-      "description": "Big operator to display and use when constructing the combined answer.",
-      "default": "sum",
+      "description": "Big operator to display and use when constructing the combined answer. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "enum": [
         "sum",
         "product",
@@ -24,11 +23,11 @@
       ]
     },
     "operator-latex": {
-      "description": "LaTeX that displays the operator when operator is custom; required for custom operators and invalid for built-in operators.",
+      "description": "LaTeX used to display the operator. Supplying this without operator implies operator=custom; it is required for explicit custom operators and may override the display of built-in operators.",
       "type": "string"
     },
     "limits": {
-      "description": "Layout of the operator limits. Auto selects the built-in operator's default layout; custom operators require bounds or domain.",
+      "description": "Layout of the operator limits. Auto infers the layout from a parseable whole correct answer when available, otherwise selects the built-in operator's default layout; custom operators without a whole answer require an explicit bounds, domain, or approach form.",
       "default": "auto",
       "enum": [
         "auto",
@@ -38,11 +37,15 @@
       ]
     },
     "index-variable": {
-      "description": "Bound variable used by the operator and automatically allowed in the body expression.",
+      "description": "Bound variable used by the operator and automatically allowed in the body expression. When omitted, it must be inferable from a whole string or dictionary correct answer.",
       "type": "string"
     },
     "variables": {
       "description": "Comma-separated list of additional symbolic variables allowed in student input.",
+      "type": "string"
+    },
+    "custom-functions": {
+      "description": "Comma-separated list of additional symbolic function names allowed in correct answers and student input.",
       "type": "string"
     },
     "limit-direction": {
@@ -90,9 +93,9 @@
       "type": "integer"
     },
     "correct-answer": {
-      "description": "Complete correct answer as a supported binder-aware SymPy expression; cannot be combined with component correct-answer attributes.",
+      "description": "Complete correct answer as a supported parseable expression, including Custom(body, limits) when operator-latex is supplied; cannot be combined with component correct-answer attributes.",
       "type": "string",
-      "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max)\\s*\\(.+\\)\\s*$"
+      "pattern": "^\\s*(?:Sum|Product|Integral|Limit|Union|Intersection|DisjointUnion|And|Or|Min|Max|Custom)\\s*\\(.+\\)\\s*$"
     },
     "correct-answer-start": {
       "description": "Correct lower-bound expression for the start field when using bounds limits.",
@@ -115,67 +118,75 @@
       "type": "string"
     }
   },
-  "required": [
-    "answers-name",
-    "index-variable"
-  ],
-  "oneOf": [
+  "required": ["answers-name"],
+  "allOf": [
     {
-      "properties": {
-        "operator": {
-          "const": "custom"
+      "anyOf": [
+        {
+          "not": {
+            "required": ["operator"]
+          }
         },
-        "limits": {
-          "enum": ["bounds", "domain"]
+        {
+          "properties": {
+            "operator": {
+              "enum": [
+                "sum",
+                "product",
+                "integral",
+                "union",
+                "intersection",
+                "disjoint-union",
+                "and",
+                "or",
+                "min",
+                "max"
+              ]
+            },
+            "limits": {
+              "enum": ["auto", "bounds", "domain"]
+            }
+          },
+          "required": ["operator"]
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "limit"
+            },
+            "limits": {
+              "enum": ["auto", "approach"]
+            }
+          },
+          "required": ["operator"]
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "custom"
+            }
+          },
+          "required": ["operator", "operator-latex"]
         }
-      },
-      "required": [
-        "operator",
-        "operator-latex",
-        "limits"
       ]
     },
     {
-      "properties": {
-        "operator": {
-          "enum": [
-            "sum",
-            "product",
-            "integral",
-            "union",
-            "intersection",
-            "disjoint-union",
-            "and",
-            "or",
-            "min",
-            "max"
-          ]
+      "anyOf": [
+        {
+          "not": {
+            "anyOf": [
+              {"required": ["correct-answer-start"]},
+              {"required": ["correct-answer-end"]},
+              {"required": ["correct-answer-domain"]},
+              {"required": ["correct-answer-target"]},
+              {"required": ["correct-answer-body"]}
+            ]
+          }
         },
-        "limits": {
-          "enum": [
-            "auto",
-            "bounds",
-            "domain"
-          ]
+        {
+          "required": ["operator", "index-variable"]
         }
-      },
-      "not": {
-        "required": ["operator-latex"]
-      }
-    },
-    {
-      "properties": {
-        "operator": {
-          "const": "limit"
-        },
-        "limits": {
-          "enum": ["auto", "approach"]
-        }
-      },
-      "required": ["operator"],
-      "not": {
-        "required": ["operator-latex"]
-      }
+      ]
     }
   ]
 }

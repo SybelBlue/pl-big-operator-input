@@ -1,8 +1,8 @@
 {
   "uuid": "19fa8579-e22f-42ef-b8ac-63cc4b56cb38",
-  "title": "Enter a definite polynomial integral",
+  "title": "Enter a randomized polynomial sum",
   "topic": "Basic arithmetic",
-  "singleVariant": true,
+  "singleVariant": false,
   "type": "v3",
   "tags": ["Under Construction!"],
   "sharePublicly": false
