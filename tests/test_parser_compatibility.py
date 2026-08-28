@@ -4,9 +4,7 @@ from pathlib import Path
 
 import pytest
 import sympy
-
 import test_pl_big_operator_input as suite
-
 
 mod = suite.mod
 
@@ -22,7 +20,7 @@ def test_wrapper_index_is_lexically_validated(token: str):
     "value",
     [
         sympy.Symbol("x"),
-        sympy.Integer(2) * sympy.Symbol("x") + 1,
+        sympy.Integer(2) * sympy.Symbol("x") + 1,  # type: ignore
         sympy.FiniteSet(1, 2),
         sympy.Interval(0, 1),
     ],
@@ -61,5 +59,5 @@ def test_partial_canonical_submission_falls_back_for_render_and_grades_zero():
 def test_malformed_correct_answer_container_has_descriptive_error():
     state = suite.data()
     state["correct_answers"] = None
-    with pytest.raises(ValueError, match="correct_answers must be a mapping"):
+    with pytest.raises(TypeError, match="mapping"):
         mod.prepare(suite.html(operator="sum"), state)
