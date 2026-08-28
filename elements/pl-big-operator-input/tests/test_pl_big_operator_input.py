@@ -123,7 +123,7 @@ def test_infers_operator_from_whole_answer_strings(operator, correct, limits):
     assert state["correct_answers"]["op"]["limits"] == limits
     assert mod._config(markup, state).index == "k"
     assert mod._config(markup, state).operator == operator
-    assert mod.OPS[operator][0] in mod.render(markup, state)
+    assert mod.OPERATOR_TEX[operator] in mod.render(markup, state)
 
 
 @pytest.mark.parametrize(
@@ -172,6 +172,33 @@ def test_sympy_limit_string_form_is_parseable():
     answer = state["correct_answers"]["op"]
     assert answer["operator"] == "limit"
     assert answer["direction"] == "from-right"
+
+
+def test_parse_normalizes_prairielearn_parser_errors():
+    with pytest.raises(mod._ParseError) as exc_info:
+        mod._parse("bad@", ())
+
+    assert exc_info.value.__cause__ is None
+    assert isinstance(exc_info.value._src, mod.psu.BaseSympyError)
+
+
+def test_parse_does_not_normalize_unexpected_errors(monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("unexpected parser failure")
+
+    monkeypatch.setattr(mod.psu, "convert_string_to_sympy", fail)
+
+    with pytest.raises(RuntimeError, match="unexpected parser failure"):
+        mod._parse("1", ())
+
+
+def test_formatted_answer_normalizes_parse_errors():
+    markup = html(operator="sum", **{"correct-answer": "Sum(bad@, (k, 1, 2))"})
+
+    with pytest.raises(ValueError, match="invalid SymPy data") as exc_info:
+        mod.prepare(markup, data())
+
+    assert isinstance(exc_info.value.__cause__, mod.psu.BaseSympyError)
 
 
 @pytest.mark.parametrize(
