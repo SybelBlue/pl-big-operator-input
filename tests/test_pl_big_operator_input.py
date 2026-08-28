@@ -147,6 +147,8 @@ def test_sympy_string_forms_are_parseable(operator, function_name):
         correct = sympy.Product(k**2, (k, 1, 4))
     elif operator == "integral":
         correct = sympy.Integral(k**2, (k, 1, 4))
+    elif operator in {"union", "intersection", "disjoint-union"}:
+        correct = sympy.Function(function_name)(sympy.FiniteSet(k), (k, 1, 4))
     else:
         correct = sympy.Function(function_name)(k**2, (k, 1, 4))
     attributes = {"correct-answer": str(correct), "index-variable": None}
@@ -560,7 +562,10 @@ def test_prepare_normalizes_function_domain_binders(operator, function, body):
     values = mod._values(mod._config(markup), answer)
     assert answer["operator"] == operator
     assert values["domain"] == sympy.FiniteSet(1, 2)
-    assert values["body"] == sympy.sympify(body)
+    expected_body = (
+        sympy.FiniteSet(sympy.Symbol("k")) if body == "{k}" else sympy.Symbol("k") ** 2
+    )
+    assert values["body"] == expected_body
 
 
 def test_prepare_normalizes_function_bounds_binder():
@@ -1557,6 +1562,7 @@ def test_component_grading_shows_icon_only_badges_on_symbolic_inputs():
 
 
 @pytest.mark.parametrize("grading", ["exact", "equivalent"])
+@pytest.mark.smoke
 def test_exact_and_equivalent_grading(grading):
     k = sympy.Symbol("k")
     state = data(
@@ -1569,6 +1575,7 @@ def test_exact_and_equivalent_grading(grading):
     assert state["partial_scores"]["op"] == {"score": 1.0, "weight": 1}
 
 
+@pytest.mark.smoke
 def test_equivalent_grading_domain_sum():
     markup = html(
         **{

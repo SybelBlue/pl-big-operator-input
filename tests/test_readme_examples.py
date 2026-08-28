@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.smoke
+
 HERE = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
     "pl_big_operator_input_readme", HERE / "pl-big-operator-input.py"

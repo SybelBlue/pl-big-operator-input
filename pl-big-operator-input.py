@@ -154,7 +154,10 @@ def _raw_correct_answer(
         return correct_attribute
     if data is None:
         return None
-    return data.get("correct_answers", {}).get(answer)
+    correct_answers = data.get("correct_answers", {})
+    if not isinstance(correct_answers, dict):
+        raise ValueError("QuestionData correct_answers must be a mapping.")
+    return correct_answers.get(answer)
 
 
 def _binder_limits(value: Any) -> LimitFormat | None:
@@ -342,7 +345,10 @@ def _infer_direction(raw: Any, operator: Operator) -> DirectionName | None:
             return _decode_limit_direction(raw)
 
         case str():
-            match _formatted_call(raw, OPERATOR_SNAKECASE[operator]):
+            formatted = _formatted_call(raw, OPERATOR_SNAKECASE[operator])
+            if formatted is None and operator == "limit":
+                formatted = _legacy_limit_call(raw)
+            match formatted:
                 case None:
                     return _decode_limit_direction(raw)
 
@@ -552,13 +558,15 @@ def _decode(value: Any, variables: tuple[str, ...] = ()) -> Any:
             try:
                 return psu.json_to_sympy(cast(Any, value), allow_sets=True)
             except Exception:  # noqa: BLE001 -- compatibility with the pinned PSU serializer.
-                # TODO(upstream PSU canonical decoder): remove this trusted-author-only
+                # TODO(parser-migration.md, upstream PSU canonical decoder): remove this trusted-author-only
                 # fallback when json_to_sympy round-trips binders and relations emitted
                 # by sympy_to_json. Student answers never enter _decode.
                 return sympy.sympify(source, locals=locals)  # type: ignore[call-overload]
 
         case str():
-            raise ValueError("Bare mathematical strings must use the PrairieLearn parser.")
+            raise ValueError(
+                "Bare mathematical strings must use the PrairieLearn parser."
+            )
 
         case _:
             return value
@@ -631,12 +639,12 @@ def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
     return _canonical(config, cast(dict[str, sympy.Basic], values))
 
 
-def _validate_component_values(
-    config: Config, values: dict[str, sympy.Basic]
-) -> None:
+def _validate_component_values(config: Config, values: dict[str, sympy.Basic]) -> None:
     allowed = set(config.variables) | {config.index}
     for component, item in values.items():
-        if _requires_set(config, cast(Component, component)) and not _is_set_input(item):
+        if _requires_set(config, cast(Component, component)) and not _is_set_input(
+            item
+        ):
             raise ValueError(f'Correct answer component "{component}" must be a set.')
         undeclared = {str(symbol) for symbol in item.free_symbols} - allowed
         if undeclared:
@@ -645,7 +653,9 @@ def _validate_component_values(
                 + ", ".join(sorted(undeclared))
             )
         if not config.allow_complex and item.has(sympy.I):
-            raise ValueError("Correct answer contains a complex value, but complex values are disabled.")
+            raise ValueError(
+                "Correct answer contains a complex value, but complex values are disabled."
+            )
 
 
 def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, Any]:
@@ -803,6 +813,8 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
         converted = _formatted_answer(config, raw)
         if converted is not None:
             return converted
+        if config.operator == "limit" and re.match(r"^\s*Limit\s*\(", raw):
+            raise ValueError("The correct answer has an invalid Limit wrapper.")
         raise TypeError(
             f'Correct answer "{config.answer}" must be a matching formatted object or canonical structured dictionary.'
         )
@@ -867,8 +879,11 @@ def _component_scores(config: Config, data: pl.QuestionData) -> dict[str, float]
     correct_json = _correct(config, data)
     if not isinstance(submitted_json, dict) or correct_json is None:
         return {}
-    submitted = _values(config, submitted_json)
-    correct = _values(config, correct_json)
+    try:
+        submitted = _values(config, submitted_json)
+        correct = _values(config, correct_json)
+    except (KeyError, TypeError, ValueError):
+        return {}
     scores = {
         component: float(
             _expressions_equivalent(submitted[component], correct[component])
@@ -1020,7 +1035,10 @@ def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
 def _submitted_tex(config: Config, data: pl.QuestionData) -> str:
     structured = data.get("submitted_answers", {}).get(config.answer)
     if isinstance(structured, dict):
-        return _structured_tex(config, structured)
+        try:
+            return _structured_tex(config, structured)
+        except (KeyError, TypeError, ValueError):
+            pass
     return _tex(config, data.get("raw_submitted_answers"))
 
 
@@ -1297,10 +1315,18 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
             }
             pl.set_weighted_score_data(data)
             return
-        submitted, correct = (
-            _values(config, submitted_json),
-            _values(config, correct_json),
-        )
+        try:
+            submitted, correct = (
+                _values(config, submitted_json),
+                _values(config, correct_json),
+            )
+        except (KeyError, TypeError, ValueError):
+            data.setdefault("partial_scores", {})[config.answer] = {
+                "score": 0.0,
+                "weight": config.weight,
+            }
+            pl.set_weighted_score_data(data)
+            return
         if config.grading == "exact":
             score = float(submitted_json == correct_json)
         elif config.grading == "component":
