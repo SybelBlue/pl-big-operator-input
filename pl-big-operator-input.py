@@ -32,7 +32,7 @@ type BuiltinOperator = Literal[
     "max",
 ]
 type Operator = Literal["custom"] | BuiltinOperator
-type OperatorFn = Literal[
+type BuiltinOperatorFn = Literal[
     "Sum",
     "Product",
     "Integral",
@@ -42,14 +42,14 @@ type OperatorFn = Literal[
     "DisjointUnion",
     "Min",
     "Max",
-    "Custom",
 ]
+type OperatorFn = Literal["Custom"] | BuiltinOperatorFn
 type LimitFormat = Literal["bounds", "domain", "approach"]
 
 
 @dataclass(frozen=True, slots=True)
 class OperatorMetadata:
-    fn_name: OperatorFn
+    fn_name: BuiltinOperatorFn
     tex: str
     default_limit: LimitFormat
     valid_limits: frozenset[LimitFormat]
@@ -126,9 +126,11 @@ CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
     "body": "correct-answer-body",
 }
 type GradingMethod = Literal["equivalent", "component", "exact"]
-GRADING_METHODS: set[GradingMethod] = {"equivalent", "component", "exact"}
+GRADING_METHODS: frozenset[GradingMethod] = frozenset(
+    ("equivalent", "component", "exact")
+)
 type AllowedBlank = Literal["none", "limits", "body", "all"]
-ALLOWED_BLANKS: set[AllowedBlank] = {"none", "limits", "body", "all"}
+ALLOWED_BLANKS: frozenset[AllowedBlank] = frozenset(("none", "limits", "body", "all"))
 
 
 class _ParseError(ValueError):
@@ -139,7 +141,7 @@ class _ParseError(ValueError):
         self._src = src
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Config:
     answer: str
     operator: Operator
@@ -1000,14 +1002,30 @@ def _direction_input(
             for value, label in (
                 ("two-sided", "±"),
                 ("from-right", "+"),
-                ("from-left", "−"),
+                ("from-left", "-"),
             )
         ],
         "score_badge": _score_badge(score) if score is not None else None,
     }
 
 
-def _question(config: Config, data: pl.QuestionData) -> str:
+def _render_mustache(
+    context: dict[str, Any], *, template: Literal["main", "submission"]
+) -> str:
+    match template:
+        case "main":
+            stub = "pl-big-operator-input.mustache"
+        case "submission":
+            stub = "pl-big-operator-input-submission.mustache"
+    return chevron.render(
+        (HERE / stub).read_text(),
+        context,
+        partials_path=str(HERE / "partials"),
+        partials_ext="mustache",
+    )
+
+
+def _question_mustache(config: Config, data: pl.QuestionData) -> str:
     index = sympy.latex(sympy.Symbol(config.index))
     component_scores = _component_scores(config, data)
     context: dict[str, Any] = {
@@ -1083,12 +1101,7 @@ def _question(config: Config, data: pl.QuestionData) -> str:
                 rf"\({{}}^{direction_suffix}\)" if direction_suffix else None,
                 score=component_scores.get("target"),
             )
-    return chevron.render(
-        (HERE / "pl-big-operator-input.mustache").read_text(),
-        context,
-        partials_path=str(HERE / "partials"),
-        partials_ext="mustache",
-    )
+    return _render_mustache(context, template="main")
 
 
 def _tex(config: Config, raw: dict[str, Any] | None) -> str:
@@ -1153,28 +1166,20 @@ def render(element_html: str, data: pl.QuestionData) -> str:
     panel = data.get("panel", "question")
     match panel:
         case "question":
-            return _question(config, data)
+            return _question_mustache(config, data)
         case "answer":
             correct = _correct(config, data)
             if correct is None:
                 return ""
-            return chevron.render(
-                (HERE / "pl-big-operator-input-submission.mustache").read_text(),
-                {"tex": _structured_tex(config, correct)},
-                partials_path=str(HERE / "partials"),
-                partials_ext="mustache",
+            return _render_mustache(
+                {"tex": _structured_tex(config, correct)}, template="submission"
             )
         case "submission":
             context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
             partial_score = data.get("partial_scores", {}).get(config.answer)
             if partial_score is not None:
                 context.update(_score_badge(float(partial_score.get("score") or 0)))
-            return chevron.render(
-                (HERE / "pl-big-operator-input-submission.mustache").read_text(),
-                context,
-                partials_path=str(HERE / "partials"),
-                partials_ext="mustache",
-            )
+            return _render_mustache(context, template="submission")
 
 
 def _parse(
@@ -1210,7 +1215,7 @@ def _is_set_input(value: sympy.Basic) -> bool:
     return isinstance(value, (sympy.Set, sympy.Symbol))
 
 
-def _component_allows_blank(config: Config, component: Component) -> bool:
+def _component_allows_blank(config: Config, component: ResponseComponent) -> bool:
     return config.allowed_blank == "all" or (
         config.allowed_blank == "body"
         if component == "body"
@@ -1278,14 +1283,13 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html, data)
     submitted = data.setdefault("submitted_answers", {})
     raw = data.get("raw_submitted_answers", {})
-    blank_components = [
+    blank_components: list[ResponseComponent] = [
         component
         for component in config.response_components
         if not str(raw.get(config.name(component), "")).strip()
     ]
     if blank_components and all(
-        _component_allows_blank(config, cast(Component, component))
-        for component in blank_components
+        _component_allows_blank(config, component) for component in blank_components
     ):
         _parse_values(config, data)
         if "direction" in blank_components:
