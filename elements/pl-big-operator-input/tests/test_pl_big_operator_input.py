@@ -634,7 +634,7 @@ def test_limit_directions(direction, sympy_direction):
         ("", "?"),
         ("two-sided", "±"),
         ("from-right", "+"),
-        ("from-left", "−"),
+        ("from-left", "-"),
     ]
     # Native constraint validation must not block Save or Save & Grade. An
     # empty selection makes a round trip and is rejected by parse() instead.
