@@ -30,12 +30,45 @@ def data(correct=None, raw=None, panel="question"):
     result = {
         "params": {},
         "correct_answers": {},
+        "answers_names": {},
         "raw_submitted_answers": raw or {},
         "panel": panel,
     }
     if correct is not None:
         result["correct_answers"]["op"] = correct
     return result
+
+
+def test_correct_lifecycle_round_trip():
+    markup = html(
+        operator="sum",
+        **{
+            "correct-answer": "Sum(k**2, (k, 1, 4))",
+        },
+    )
+    state = data()
+    mod.prepare(markup, state)
+    assert state["answers_names"] == {"op": True}
+
+    lifecycle = {
+        **state,
+        "format_errors": {},
+        "partial_scores": {},
+        "score": 0,
+        "feedback": {},
+        "gradable": True,
+        "test_type": "correct",
+        "submitted_answers": {},
+    }
+    mod.test(markup, lifecycle)
+    lifecycle["submitted_answers"] = dict(lifecycle["raw_submitted_answers"])
+    mod.parse(markup, lifecycle)
+    mod.grade(markup, lifecycle)
+
+    assert lifecycle["format_errors"] == {}
+    assert lifecycle["submitted_answers"]["op"] == state["correct_answers"]["op"]
+    assert lifecycle["partial_scores"]["op"]["score"] == 1
+    assert lifecycle["score"] == 1
 
 
 @pytest.mark.parametrize(
