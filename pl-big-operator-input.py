@@ -919,6 +919,7 @@ def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
 
 def prepare(element_html: str, data: pl.QuestionData) -> None:
     config = _config(element_html, data)
+    pl.check_answers_names(data, config.answer)
     correct = _correct(config, data)
     if correct is not None:
         data.setdefault("correct_answers", {})[config.answer] = correct
@@ -1465,6 +1466,26 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
                 )
     data.setdefault("partial_scores", {})[config.answer] = {
         "score": score,
+        "weight": config.weight,
+    }
+    pl.set_weighted_score_data(data)
+
+
+def test(element_html: str, data: pl.ElementTestData) -> None:
+    if data["test_type"] != "correct":
+        return
+    config = _config(element_html, data)
+    correct = _correct(config, data)
+    if correct is None:
+        return
+    values = _values(config, correct)
+    raw = data.setdefault("raw_submitted_answers", {})
+    for component, value in values.items():
+        raw[config.name(component)] = str(value)
+    if config.limits == "approach" and config.allow_direction_input:
+        raw[config.name("direction")] = correct.get("direction", config.direction)
+    data.setdefault("partial_scores", {})[config.answer] = {
+        "score": 1,
         "weight": config.weight,
     }
     pl.set_weighted_score_data(data)

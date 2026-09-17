@@ -40,6 +40,7 @@ class TestReadmeExamples(SmokeTestSuite):
         data = {
             "params": {},
             "correct_answers": {},
+            "answers_names": {},
             "raw_submitted_answers": {},
             "panel": "question",
         }
