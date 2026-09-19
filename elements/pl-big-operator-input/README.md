@@ -4,7 +4,7 @@ This element collects an indexed big-operator expression in separate limit and b
 
 Its visible component fields are rendered and parsed by a vendored, commit-pinned copy of PrairieLearn's `pl-symbolic-input`.
 The wrapper is responsible for the operator layout, canonical aggregate answer, and grading; the upstream element owns the MathLive editor and symbolic-input parsing behavior.
-The source commit and license are recorded alongside the vendor directory in `prairielearn-source.json`.
+The source commit is recorded in `pyproject.toml` and `plvendor-lock.yaml`; `pl-vendor` also reapplies the upstream license from `.vendor-patches/`.
 
 ```html
 <pl-big-operator-input

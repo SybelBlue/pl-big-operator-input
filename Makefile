@@ -4,10 +4,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := test
 
 UV_CACHE_DIR ?= /private/tmp/learnvia_uv_cache
-PL_REF ?= master
 
-LIB_TEST_PATHS := elements/**/tests
-SCRIPT_TEST_PATHS := scripts/tests
+TEST_PATHS := elements/**/tests
 
 export UV_CACHE_DIR
 
@@ -15,7 +13,7 @@ DOCKER_JOBS_DIR ?= $(shell mktemp -d /tmp/pl-docker-jobs.XXXXXX)
 
 export DOCKER_JOBS_DIR
 
-.PHONY: clean deps venv test test-smoke test-regression test-unit test-publication typecheck format-py format-json format-html format check-format check-pl-schemas update-prairielearn-pin check-prairielearn-pin ci-dryrun fetch-pl-schemas dev docker
+.PHONY: clean deps venv test test-smoke test-regression test-unit test-publication typecheck format-py format-json format-html format check-format check-pl-schemas sync-vendor verify-vendor ci-dryrun fetch-pl-schemas dev docker
 
 # install deps, RUN ME FIRST
 # requires pnpm and uv to be installed on the commandline
@@ -32,16 +30,16 @@ fetch-pl-schemas:
 
 # testing and validation
 test:
-	uv run --active pytest $(LIB_TEST_PATHS) $(SCRIPT_TEST_PATHS) $(PYTEST_ARGS)
+	uv run --active pytest $(TEST_PATHS) $(PYTEST_ARGS)
 
 test-smoke:
-	uv run --active pytest -m smoke $(LIB_TEST_PATHS) $(PYTEST_ARGS)
+	uv run --active pytest -m smoke $(TEST_PATHS) $(PYTEST_ARGS)
 
 test-regression:
-	uv run --active pytest -m regression $(LIB_TEST_PATHS) $(PYTEST_ARGS)
+	uv run --active pytest -m regression $(TEST_PATHS) $(PYTEST_ARGS)
 
 test-unit:
-	uv run --active pytest -m unit $(LIB_TEST_PATHS) $(SCRIPT_TEST_PATHS) $(PYTEST_ARGS)
+	uv run --active pytest -m unit $(TEST_PATHS) $(PYTEST_ARGS)
 
 test-publication: test typecheck check-format check-pl-schemas
 	git diff --check
@@ -55,13 +53,13 @@ check-format:
 check-pl-schemas:
 	uv run --active scripts/pull_down_prairielearn_schemas.py
 
-update-prairielearn-pin:
-	uv run --active scripts/update_prairielearn_pin.py --ref "$(PL_REF)"
+sync-vendor:
+	uv run --locked --no-sync pl-vendor sync
 
-check-prairielearn-pin:
-	uv run --active scripts/update_prairielearn_pin.py --check
+verify-vendor:
+	uv run --locked --no-sync pl-vendor verify
 
-ci-dryrun: test typecheck check-format check-pl-schemas check-prairielearn-pin
+ci-dryrun: test typecheck check-format check-pl-schemas verify-vendor
 
 
 # format source
