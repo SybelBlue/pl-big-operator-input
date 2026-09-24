@@ -19,7 +19,7 @@ dev = [
 
 [tool.uv.sources.prairielearn]
 git = "https://github.com/PrairieLearn/PrairieLearn.git"
-rev = "14e65830861bee4cfe10c3ef73b000794edd66ed" # deliberately pinned with vendored pl-symbolic-input
+rev = "0952fbfcde4fee9d8a007e87deaeb49970598c05" # deliberately pinned with vendored pl-symbolic-input
 subdirectory = "apps/prairielearn/python"
 
 [tool.pyright]
@@ -35,5 +35,5 @@ required-version = "^0.4"
 [tool.pl-vendor.packages.prairielearn-symbolic-input]
 path = "elements/pl-big-operator-input/vendor/prairielearn/pl-symbolic-input"
 url = "https://github.com/PrairieLearn/PrairieLearn.git"
-commit = "14e65830861bee4cfe10c3ef73b000794edd66ed"
+commit = "0952fbfcde4fee9d8a007e87deaeb49970598c05"
 subdirectory = "apps/prairielearn/elements/pl-symbolic-input"

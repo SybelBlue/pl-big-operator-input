@@ -19,7 +19,8 @@ export DOCKER_JOBS_DIR
 # requires pnpm and uv to be installed on the commandline
 deps: fetch-pl-schemas
 	pnpm install
-	uv sync
+	uv sync --active 
+	@$(MAKE) sync-vendor
 
 venv: deps
 	uv venv --refresh
@@ -54,10 +55,10 @@ check-pl-schemas:
 	uv run --active scripts/pull_down_prairielearn_schemas.py
 
 sync-vendor:
-	uv run --locked --no-sync pl-vendor sync
+	uv run --active --locked --no-sync pl-vendor sync
 
 verify-vendor:
-	uv run --locked --no-sync pl-vendor verify
+	uv run --active --locked --no-sync pl-vendor verify
 
 ci-dryrun: test typecheck check-format check-pl-schemas verify-vendor
 

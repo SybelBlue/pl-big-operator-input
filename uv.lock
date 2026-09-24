@@ -453,8 +453,9 @@ wheels = [
 [[package]]
 name = "prairielearn"
 version = "0.0.0+internal"
-source = { git = "https://github.com/PrairieLearn/PrairieLearn.git?subdirectory=apps%2Fprairielearn%2Fpython&rev=14e65830861bee4cfe10c3ef73b000794edd66ed#14e65830861bee4cfe10c3ef73b000794edd66ed" }
+source = { git = "https://github.com/PrairieLearn/PrairieLearn.git?subdirectory=apps%2Fprairielearn%2Fpython&rev=0952fbfcde4fee9d8a007e87deaeb49970598c05#0952fbfcde4fee9d8a007e87deaeb49970598c05" }
 dependencies = [
+    { name = "chevron" },
     { name = "coloraide" },
     { name = "jsonschema" },
     { name = "lxml" },
@@ -774,7 +775,7 @@ dev = [
 requires-dist = [
     { name = "chevron" },
     { name = "lxml" },
-    { name = "prairielearn", git = "https://github.com/PrairieLearn/PrairieLearn.git?subdirectory=apps%2Fprairielearn%2Fpython&rev=14e65830861bee4cfe10c3ef73b000794edd66ed" },
+    { name = "prairielearn", git = "https://github.com/PrairieLearn/PrairieLearn.git?subdirectory=apps%2Fprairielearn%2Fpython&rev=0952fbfcde4fee9d8a007e87deaeb49970598c05" },
 ]
 
 [package.metadata.requires-dev]
