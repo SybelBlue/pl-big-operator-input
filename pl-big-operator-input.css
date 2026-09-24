@@ -1,13 +1,23 @@
 .pl-big-operator-input {
-  display: inline-flex;
+  --pl-big-operator-input-gap: 0.8rem;
+
   align-items: center;
-  gap: 0.8rem;
-  vertical-align: middle;
+  gap: var(--pl-big-operator-input-gap);
   margin: 0.25rem 0;
 }
 
-.pl-big-operator-input__submission {
+.pl-big-operator-input--inline {
   display: inline-flex;
+  vertical-align: middle;
+}
+
+.pl-big-operator-input--block {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.pl-big-operator-input__submission {
   align-items: center;
   gap: 0.4rem;
 }
@@ -55,7 +65,7 @@
   min-width: 1ch;
   padding: 0.25rem;
   color: var(--bs-danger);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
   text-align: center;
   background-image: none;
   appearance: none;
@@ -109,6 +119,10 @@
   display: none;
 }
 
+.pl-big-operator-input math-field::part(menu-toggle) {
+  display: none;
+}
+
 .pl-big-operator-input__upper,
 .pl-big-operator-input__lower {
   display: flex;
@@ -124,29 +138,34 @@
 
 .pl-big-operator-input__upper math-field,
 .pl-big-operator-input__lower math-field {
-  min-width: var(--pl-big-operator-input-limit-size);
+  min-width: var(--pl-big-operator-input-index-field-size) !important;
   text-align: center;
 }
 
 .pl-big-operator-input__annotation math-field {
-  min-width: var(--pl-big-operator-input-limit-size);
+  min-width: var(--pl-big-operator-input-index-field-size) !important;
 }
 
 /* Hidden formula-editor inputs make the visible math-field a non-first child. */
 .pl-big-operator-input__range-upper-bound .input-group > math-field {
   border-top-left-radius: var(--bs-border-radius) !important;
   border-bottom-left-radius: var(--bs-border-radius) !important;
+  padding-inline: 0.1rem;
 }
 
-.pl-big-operator-input__bounds > .pl-big-operator-input__upper {
+.pl-big-operator-input__range-upper-bound math-field::part(content) {
+  justify-content: center;
+}
+
+.pl-big-operator-input__operator-stack--bounds > .pl-big-operator-input__upper {
   order: 1;
 }
 
-.pl-big-operator-input__bounds > .pl-big-operator-input__operator {
+.pl-big-operator-input__operator-stack--bounds > .pl-big-operator-input__operator {
   order: 2;
 }
 
-.pl-big-operator-input__bounds > .pl-big-operator-input__lower {
+.pl-big-operator-input__operator-stack--bounds > .pl-big-operator-input__lower {
   order: 3;
 }
 
@@ -164,11 +183,29 @@
   justify-content: flex-start;
 }
 
-.pl-big-operator-input__operator {
-  font-size: 2rem;
+.pl-big-operator-input__operator,
+.pl-big-operator-input__affix {
   line-height: 0.9;
   font-weight: 400;
   margin: 0.15rem 0;
+}
+
+.pl-big-operator-input__operator,
+.pl-big-operator-input__affix,
+.pl-big-operator-input--block .pl-big-operator-input__submission-value {
+  font-size: 2rem;
+}
+
+.pl-big-operator-input__affix--prefix {
+  margin-inline-end: calc(-1 * var(--pl-big-operator-input-gap));
+}
+
+.pl-big-operator-input__affix--suffix {
+  margin-inline-start: calc(-1 * var(--pl-big-operator-input-gap));
+}
+
+.pl-big-operator-input__integral-tail {
+  font-size: 1.5rem;
 }
 
 .pl-big-operator-input__body {
@@ -176,19 +213,19 @@
   align-items: center;
 }
 
+.pl-big-operator-input__body .input-group {
+  flex-wrap: nowrap;
+}
+
 .pl-big-operator-input__body math-field {
   border-top-left-radius: var(--bs-border-radius) !important;
   border-bottom-left-radius: var(--bs-border-radius) !important;
-  min-width: var(--pl-big-operator-input-body-size);
+  min-width: var(--pl-big-operator-input-body-size) !important;
 }
 
 .pl-big-operator-input__body .input-group > math-field:last-child {
   border-top-right-radius: var(--bs-border-radius) !important;
   border-bottom-right-radius: var(--bs-border-radius) !important;
-}
-
-.pl-big-operator-input__differential {
-  font-size: 1.5rem;
 }
 
 .pl-big-operator-input__label.visually-hidden {
@@ -205,18 +242,20 @@
 
 @media (max-width: 640px) {
   .pl-big-operator-input {
-    gap: 0.6rem;
+    --pl-big-operator-input-gap: 0.6rem;
   }
 
   .pl-big-operator-input__body {
     min-width: 10rem;
   }
 
-  .pl-big-operator-input__operator {
+  .pl-big-operator-input__operator,
+  .pl-big-operator-input__affix,
+  .pl-big-operator-input--block .pl-big-operator-input__submission-value {
     font-size: 2.9rem;
   }
 
-  .pl-big-operator-input__differential {
+  .pl-big-operator-input__integral-tail {
     font-size: 2rem;
   }
 

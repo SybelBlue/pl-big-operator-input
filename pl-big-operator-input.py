@@ -1,136 +1,131 @@
 from __future__ import annotations
 
+import copy
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, cast
+from types import (
+    MappingProxyType as frozendict,  # ruff: ignore[camelcase-imported-as-lowercase]
+)
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import chevron
 import lxml.html
 import prairielearn as pl
+import prairielearn.big_operator_utils as pbo
+import prairielearn.internal.symbolic_input as psi
 import prairielearn.sympy_utils as psu
-import symbolic_input_adapter
 import sympy
 import sympy.sets
+from prairielearn.big_operator_utils import BigOperatorName as OperatorName
+from prairielearn.internal.symbolic_input import DisplayType
+from prairielearn.timeout_utils import SignalTimeout, TimeoutState
 
-HERE = Path(__file__).parent
+if TYPE_CHECKING:
+    from prairielearn.big_operator_utils import BigOperator, BigOperatorJson
+    from prairielearn.big_operator_utils import BigOperatorDirection as DirectionName
+    from prairielearn.big_operator_utils import BigOperatorIndexing as Indexing
+    from prairielearn.big_operator_utils import BigOperatorSympyName as SympyOperator
+    from prairielearn.question_utils import QuestionData
+    from prairielearn.sympy_utils import (
+        AllowedSympyType,
+        SympyJson,
+    )
 
-BODY_SIZE_DEFAULT = 16
-BOUNDS_LIMIT_SIZE_DEFAULT = 7
-ANNOTATION_LIMIT_SIZE_DEFAULT = 10
+    type DirectionSymbol = Literal["+-", "-", "+"]
+    type Component = Literal["lower", "upper", "domain", "target", "body"]
+    type ResponseComponent = Literal["direction"] | Component
+    type ResponseValues = dict[Component, sympy.Basic]
 
-type BuiltinOperator = Literal[
-    "sum",
-    "product",
-    "integral",
-    "limit",
-    "union",
-    "intersection",
-    "disjoint-union",
-    "min",
-    "max",
-]
-type Operator = Literal["custom"] | BuiltinOperator
-type BuiltinOperatorFn = Literal[
-    "Sum",
-    "Product",
-    "Integral",
-    "Limit",
-    "Union",
-    "Intersection",
-    "DisjointUnion",
-    "Min",
-    "Max",
-]
-type OperatorFn = Literal["Custom"] | BuiltinOperatorFn
-type LimitFormat = Literal["bounds", "domain", "approach"]
+    type GradingMethod = Literal["equivalent", "component", "exact", "none"]
+    type AllowedBlank = Literal["none", "indices", "body", "all"]
+
+    type FormattedCall = tuple[str, tuple[str, ...]]
+
+HERE: Final = Path(__file__).parent
+SCHEMA_PATH: Final = HERE / "pl-big-operator-input.schema.json"
+SYMBOLIC_INPUT_TEMPLATE_PATH: Final = (
+    HERE
+    / "vendor"
+    / "prairielearn"
+    / "pl-symbolic-input"
+    / "pl-symbolic-input.mustache"
+)
+
+BODY_SIZE_DEFAULT: Final = 16
+BOUNDS_INDEX_FIELD_SIZE_DEFAULT: Final = 7
+ANNOTATION_INDEX_FIELD_SIZE_DEFAULT: Final = 10
+IMAGINARY_UNIT_FOR_DISPLAY_DEFAULT: Final = "i"
+DISPLAY_DEFAULT: Final = DisplayType.BLOCK
+DISPLAY_LOG_AS_LN_DEFAULT: Final = False
+SYMPY_TIMEOUT: Final = 3
+SYMPY_TIMEOUT_FORMAT_ERROR: Final = (
+    "Your answer did not converge, try a simpler expression."
+)
 
 
 @dataclass(frozen=True, slots=True)
 class OperatorMetadata:
-    fn_name: BuiltinOperatorFn
     tex: str
-    default_limit: LimitFormat
-    valid_limits: frozenset[LimitFormat]
     bounds_constructor: type[sympy.Basic]
     _domain_constructor: type[sympy.Basic] | None = None
-
-    def __post_init__(self):
-        assert self.default_limit in self.valid_limits
 
     @property
     def domain_constructor(self) -> type[sympy.Basic]:
         return self._domain_constructor or self.bounds_constructor
 
 
-_BOUNDS_DOMAIN = frozenset(("bounds", "domain"))
-OP_METADATA: dict[BuiltinOperator, OperatorMetadata] = {
-    "sum": OperatorMetadata(
-        "Sum", r"\sum", "bounds", _BOUNDS_DOMAIN, sympy.Sum, sympy.Add
-    ),
-    "product": OperatorMetadata(
-        "Product", r"\prod", "bounds", _BOUNDS_DOMAIN, sympy.Product, sympy.Mul
-    ),
-    "integral": OperatorMetadata(
-        "Integral", r"\int", "bounds", _BOUNDS_DOMAIN, sympy.Integral
-    ),
-    "limit": OperatorMetadata(
-        "Limit", r"\lim", "approach", frozenset(("approach",)), sympy.Limit
-    ),
-    "union": OperatorMetadata(
-        "Union", r"\bigcup", "domain", _BOUNDS_DOMAIN, sympy.Union
-    ),
-    "intersection": OperatorMetadata(
-        "Intersection", r"\bigcap", "domain", _BOUNDS_DOMAIN, sympy.Intersection
-    ),
-    "disjoint-union": OperatorMetadata(
-        "DisjointUnion",
-        r"\bigsqcup",
-        "domain",
-        _BOUNDS_DOMAIN,
-        sympy.sets.DisjointUnion,
-    ),
-    "min": OperatorMetadata("Min", r"\min", "domain", _BOUNDS_DOMAIN, sympy.Min),
-    "max": OperatorMetadata("Max", r"\max", "domain", _BOUNDS_DOMAIN, sympy.Max),
-}
-
-
-def _operator_fn_name(operator: Operator) -> OperatorFn:
-    return "Custom" if operator == "custom" else OP_METADATA[operator].fn_name
-
-
-type DirectionName = Literal["two-sided", "from-left", "from-right"]
-type DirectionSymbol = Literal["+-", "-", "+"]
-DIRECTION_SYMBOLS: dict[DirectionName, DirectionSymbol] = {
-    "two-sided": "+-",
-    "from-left": "-",
-    "from-right": "+",
-}
-DIRECTION_NAMES: dict[DirectionSymbol, DirectionName] = {
-    symbol: name for name, symbol in DIRECTION_SYMBOLS.items()
-}
-type FormattedCall = tuple[str, tuple[str, ...]]
-type Component = Literal["lower", "upper", "domain", "target", "body"]
-type ResponseComponent = Literal["direction"] | Component
-COMPONENTS_MAP: dict[LimitFormat, Sequence[Component]] = {
-    "bounds": ("lower", "upper", "body"),
-    "domain": ("domain", "body"),
-    "approach": ("target", "body"),
-}
-CORRECT_COMPONENT_ATTRIBUTES: dict[Component, str] = {
-    "lower": "correct-answer-start",
-    "upper": "correct-answer-end",
-    "domain": "correct-answer-domain",
-    "target": "correct-answer-target",
-    "body": "correct-answer-body",
-}
-type GradingMethod = Literal["equivalent", "component", "exact"]
-GRADING_METHODS: frozenset[GradingMethod] = frozenset(
-    ("equivalent", "component", "exact")
+OP_METADATA: Final[frozendict[SympyOperator, OperatorMetadata]] = frozendict(
+    {
+        "Sum": OperatorMetadata(r"\sum", sympy.Sum, sympy.Add),
+        "Product": OperatorMetadata(r"\prod", sympy.Product, sympy.Mul),
+        "Integral": OperatorMetadata(r"\int", sympy.Integral),
+        "Limit": OperatorMetadata(r"\lim", sympy.Limit),
+        "Union": OperatorMetadata(r"\bigcup", sympy.Union),
+        "Intersection": OperatorMetadata(r"\bigcap", sympy.Intersection),
+        "DisjointUnion": OperatorMetadata(r"\bigsqcup", sympy.sets.DisjointUnion),
+        "Min": OperatorMetadata(r"\min", sympy.Min),
+        "Max": OperatorMetadata(r"\max", sympy.Max),
+    }
 )
-type AllowedBlank = Literal["none", "limits", "body", "all"]
-ALLOWED_BLANKS: frozenset[AllowedBlank] = frozenset(("none", "limits", "body", "all"))
+
+
+DIRECTION_SYMBOLS: Final[frozendict[DirectionName, DirectionSymbol]] = frozendict(
+    {
+        "two-sided": "+-",
+        "from-left": "-",
+        "from-right": "+",
+    }
+)
+DIRECTION_NAMES: Final[frozendict[DirectionSymbol, DirectionName]] = frozendict(
+    {symbol: name for name, symbol in DIRECTION_SYMBOLS.items()}
+)
+
+COMPONENTS_MAP: Final[frozendict[Indexing, frozenset[Component]]] = frozendict(
+    {
+        "bounds": frozenset(("lower", "upper", "body")),
+        "domain": frozenset(("domain", "body")),
+        "approaches": frozenset(("target", "body")),
+    }
+)
+
+GRADING_METHODS: Final[frozenset[GradingMethod]] = frozenset(
+    (
+        "equivalent",
+        "component",
+        "exact",
+        "none",
+    )
+)
+ALLOWED_BLANKS: Final[frozenset[AllowedBlank]] = frozenset(
+    (
+        "none",
+        "indices",
+        "body",
+        "all",
+    )
+)
 
 
 class _ParseError(ValueError):
@@ -141,50 +136,52 @@ class _ParseError(ValueError):
         self._src = src
 
 
-@dataclass(frozen=True, slots=True)
-class Config:
-    answer: str
-    operator: Operator
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RenderConfig:
+    answer_name: str
+    operator: OperatorName
     operator_latex: str
-    limits: LimitFormat
+    has_operator_latex_override: bool
+    prefix_latex: str | None
+    suffix_latex: str | None
+    indexing: Indexing
     index: str
     variables: tuple[str, ...]
     custom_functions: tuple[str, ...]
     direction: DirectionName
     allow_direction_input: bool
     allowed_blank: AllowedBlank
+    display: DisplayType
     allow_complex: bool
+    imaginary_unit: str
+    display_log_as_ln: bool
     show_help_text: bool
     body_size: int
-    limit_size: int
+    index_field_size: int
     grading: GradingMethod
     body_weight: int
     weight: int
     correct_attribute: str | None
-    correct_components: tuple[tuple[Component, str], ...]
 
     @property
-    def components(self) -> Sequence[Component]:
-        return COMPONENTS_MAP[self.limits]
+    def components(self) -> frozenset[Component]:
+        return COMPONENTS_MAP[self.indexing]
 
     @property
     def response_components(self) -> Sequence[ResponseComponent]:
-        if self.limits == "approach" and self.allow_direction_input:
+        if self.indexing == "approaches" and self.allow_direction_input:
             return (*self.components, "direction")
         return tuple(self.components)
 
-    def name(self, component: str) -> str:
-        return f"{self.answer}-{ {'lower': 'start', 'upper': 'end'}.get(component, component) }"
+    def component_name(self, component: ResponseComponent) -> str:
+        return f"{self.answer_name}-{component}"
 
 
 def _raw_correct_answer(
     answer: str,
     correct_attribute: str | None,
-    correct_components: dict[Component, str],
     data: Any | None,
 ) -> Any:
-    if correct_components:
-        return correct_components
     if correct_attribute is not None:
         return correct_attribute
     if data is None:
@@ -195,10 +192,10 @@ def _raw_correct_answer(
     return correct_answers.get(answer)
 
 
-def _binder_limits(value: Any) -> LimitFormat | None:
+def _binder_indexing(value: sympy.Basic) -> Indexing | None:
     match value:
         case sympy.Limit():
-            return "approach"
+            return "approaches"
         case sympy.Sum() | sympy.Product() | sympy.Integral():
             if len(value.limits) != 1:
                 return None
@@ -235,7 +232,7 @@ def _split_top_level(source: str) -> list[str]:
     return parts
 
 
-def _formatted_call(source: str, function_name: OperatorFn) -> FormattedCall | None:
+def _formatted_call(source: str, function_name: OperatorName) -> FormattedCall | None:
     match = re.fullmatch(
         rf"\s*{re.escape(function_name)}\s*\((.*)\)\s*", source, re.DOTALL
     )
@@ -244,23 +241,23 @@ def _formatted_call(source: str, function_name: OperatorFn) -> FormattedCall | N
     arguments = _split_top_level(match.group(1))
     if len(arguments) != 2:
         return None
-    limits_source = arguments[1].strip()
-    if not (limits_source.startswith("(") and limits_source.endswith(")")):
+    indexing_source = arguments[1].strip()
+    if not (indexing_source.startswith("(") and indexing_source.endswith(")")):
         return None
-    limits = _split_top_level(limits_source[1:-1])
-    return arguments[0], tuple(limits)
+    indexing_args = _split_top_level(indexing_source[1:-1])
+    return arguments[0], tuple(indexing_args)
 
 
-def _formatted_direction(limits: Sequence[str]) -> DirectionSymbol | None:
-    if len(limits) != 3:
+def _direction_symbol_from_args(indexing_args: Sequence[str]) -> DirectionSymbol | None:
+    if len(indexing_args) != 3:
         return None
-    source = limits[2].strip()
+    source = indexing_args[2].strip()
     if len(source) < 2 or source[0] not in {"'", '"'} or source[-1] != source[0]:
         return None
     return source[1:-1]  # type: ignore
 
 
-def _legacy_limit_call(source: str) -> FormattedCall | None:
+def _parse_sympy_limit_call(source: str) -> FormattedCall | None:
     """Parse SymPy's documented ``Limit(body, index, target, dir=...)`` form."""
     match = re.fullmatch(r"\s*Limit\s*\((.*)\)\s*", source, re.DOTALL)
     if match is None:
@@ -274,8 +271,8 @@ def _legacy_limit_call(source: str) -> FormattedCall | None:
     return arguments[0], (arguments[1], arguments[2], repr(direction.group(2)))
 
 
-def _symbol_name(value: Any) -> str | None:
-    return str(value) if isinstance(value, sympy.Symbol) else None
+def _symbol_name(value: sympy.Basic) -> str | None:
+    return value.name if isinstance(value, sympy.Symbol) else None
 
 
 def _identifier(source: str) -> str | None:
@@ -295,112 +292,82 @@ def _binder_index(value: Any) -> str | None:
     return None
 
 
-def _infer_spec(
-    raw: Any,
-) -> tuple[Operator | None, LimitFormat | None, str | None]:
+def _parse_spec(raw: Any) -> tuple[OperatorName | None, Indexing | None, str | None]:
     match raw:
         case str():
             regex_match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(", raw)
             function = regex_match.group(1) if regex_match else None
-            parsed_operator: Operator | None = (
-                "custom"
-                if function == "Custom"
-                else next(
-                    (
-                        operator
-                        for operator, metadata in OP_METADATA.items()
-                        if metadata.fn_name == function
-                    ),
-                    None,
-                )
+            parsed_operator = (
+                cast(OperatorName, function)
+                if function == "Custom" or function in OP_METADATA
+                else None
             )
             if parsed_operator is None:
                 return None, None, None
             operator = parsed_operator
-            formatted = _formatted_call(raw, _operator_fn_name(parsed_operator))
-            if formatted is None and parsed_operator == "limit":
-                formatted = _legacy_limit_call(raw)
+            formatted = _formatted_call(raw, parsed_operator)
+            if formatted is None and parsed_operator == "Limit":
+                formatted = _parse_sympy_limit_call(raw)
             if formatted is not None:
-                index = _identifier(formatted[1][0]) if formatted[1] else None
+                index_name = _identifier(formatted[1][0]) if formatted[1] else None
                 match parsed_operator, len(formatted[1]):
-                    case "limit", _:
-                        return operator, "approach", index
+                    case "Limit", _:
+                        return operator, "approaches", index_name
                     case _, 2:
-                        return operator, "domain", index
+                        return operator, "domain", index_name
                     case _, 3:
                         return (
                             operator,
-                            "approach"
-                            if _formatted_direction(formatted[1]) is not None
+                            "approaches"
+                            if _direction_symbol_from_args(formatted[1]) is not None
                             else "bounds",
-                            index,
+                            index_name,
                         )
                     case _:
-                        return operator, None, index
-            try:
-                value = _decode(raw)
-            except Exception:  # noqa: BLE001 -- malformed author strings fail during normalization.
-                return operator, None, None
-            return operator, _binder_limits(value), _binder_index(value)
+                        return operator, None, index_name
+            if value := _as_sympy(raw):
+                return operator, _binder_indexing(value), _binder_index(value)
+            return operator, None, None
 
-        case {"_type": "operator_expression"}:
-            operator = raw.get("operator")
-            limits = raw.get("limits")
-            try:
-                index = _symbol_name(_decode(raw.get("index")))
-            except Exception:  # noqa: BLE001 -- malformed canonical answers fail later.
-                index = None
-            if (
-                raw.get("_version") == 1
-                and (operator == "custom" or operator in OP_METADATA)
-                and limits in COMPONENTS_MAP
-                and index is not None
+        case dict() if pbo.is_big_operator_json(raw):
+            if (index_symbol := _as_sympy(raw["index"])) is not None and (
+                index_name := _symbol_name(index_symbol)
             ):
-                return operator, limits, index
+                return raw["operator"], raw["indexing"], index_name
             return None, None, None
 
-        case {"_type": "sympy"}:
-            try:
-                value = _decode(raw)
-            except Exception:  # noqa: BLE001 -- malformed author JSON can fail in several decoders.
-                return None, None, None
-
-            for operator in ("sum", "product", "integral", "limit"):
-                if isinstance(value, OP_METADATA[operator].bounds_constructor):
-                    return operator, _binder_limits(value), _binder_index(value)
-            return None, None, None
+        case {"_type": "sympy", "_value": str(source)}:
+            return _parse_spec(source)
 
         case _:
             return None, None, None
 
 
-def _infer_direction(raw: Any, operator: Operator) -> DirectionName | None:
-    def _decode_limit_direction(raw) -> DirectionName | None:
-        try:
-            value = _decode(raw)
-        except Exception:  # noqa: BLE001 -- malformed author JSON is validated later.
-            return None
-        if isinstance(value, sympy.Limit):
+def _parse_direction(raw: Any, operator: OperatorName) -> DirectionName | None:
+    def _parse_limit_direction(raw: Any | str) -> DirectionName | None:
+        value = _as_sympy(raw)
+        if value is not None and isinstance(value, sympy.Limit):
             return DIRECTION_NAMES.get(str(value.args[3]))  # type: ignore
         return None
 
     match raw:
-        case {"_type": "operator_expression"}:
-            direction = raw.get("direction")
-            return direction if direction in DIRECTION_SYMBOLS else None
+        case {"_type": "big_operator", "direction": dir}:
+            return dir if dir in DIRECTION_SYMBOLS else None
 
-        case {"_type": "sympy"}:
-            return _decode_limit_direction(raw)
+        case {"_type": "sympy", "_value": str(source)}:
+            return _parse_direction(source, operator)
 
         case str():
-            formatted = _formatted_call(raw, _operator_fn_name(operator))
-            if formatted is None and operator == "limit":
-                formatted = _legacy_limit_call(raw)
+            formatted = _formatted_call(raw, operator)
+            if formatted is None and operator == "Limit":
+                formatted = _parse_sympy_limit_call(raw)
             match formatted:
                 case None:
-                    return _decode_limit_direction(raw)
+                    return _parse_limit_direction(raw)
 
-                case _, limits if direction := _formatted_direction(limits):
+                case _, indexing_args if direction := _direction_symbol_from_args(
+                    indexing_args
+                ):
                     return DIRECTION_NAMES.get(direction)
 
                 case _:
@@ -416,58 +383,32 @@ def _get_tuple_attrib[T](
     val = pl.get_string_attrib(element, attr, None)
     if val is None:
         return default
-    return tuple(filter(bool, map(str.strip, val.split())))
+    return tuple(filter(bool, map(str.strip, val.split(","))))
 
 
-def _config(html: str, data: pl.QuestionData | None = None) -> Config:
+def _config(html: str, data: QuestionData | None = None) -> RenderConfig:
     element = lxml.html.fragment_fromstring(html)
     answer = pl.get_string_attrib(element, "answers-name", None)
     if answer is None or not answer.strip():
         raise ValueError('Required attribute "answers-name" missing')
     answer = answer.strip()
-    explicit_index = pl.get_string_attrib(element, "index-variable", None)
-    explicit_index = explicit_index.strip() if explicit_index else None
-    explicit_operator = pl.get_string_attrib(element, "operator", None)
-    if explicit_operator is not None:
-        explicit_operator = explicit_operator[:1].lower() + explicit_operator[1:]
     custom_latex = pl.get_string_attrib(element, "operator-latex", None)
     correct_attribute = pl.get_string_attrib(element, "correct-answer", None)
-    supplied_components: dict[Component, str] = {
-        component: value
-        for component, attribute in CORRECT_COMPONENT_ATTRIBUTES.items()
-        if (value := pl.get_string_attrib(element, attribute, None)) is not None
-    }
-    raw_correct = _raw_correct_answer(
-        answer, correct_attribute, supplied_components, data
-    )
-    inferred_operator, inferred_limits, inferred_index = None, None, None
-    if not supplied_components and isinstance(raw_correct, (str, dict)):
-        inferred_operator, inferred_limits, inferred_index = _infer_spec(raw_correct)
-    index = explicit_index or inferred_index
-    if index is None:
+    raw_correct = _raw_correct_answer(answer, correct_attribute, data)
+    if raw_correct is None:
         raise ValueError(
-            'The "index-variable" attribute is required; it cannot be inferred from the provided correct-answer.'
+            f'Correct answer "{answer}" is required to configure the big operator.'
         )
-    if explicit_operator is None and custom_latex is None and inferred_operator is None:
+    operator, indexing, index = _parse_spec(raw_correct)
+    if operator is None or indexing is None or index is None:
         raise ValueError(
-            'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
+            f'Correct answer "{answer}" must be a supported complete answer from '
+            "which the operator, index variable, and indexing can be derivered."
         )
-    if (
-        operator := (
-            explicit_operator
-            or inferred_operator
-            or ("custom" if custom_latex is not None else None)
-        )
-    ) is None:
-        raise ValueError(
-            'The "operator" attribute is required; it cannot be inferred from the provided correct-answer.'
-        )
-    if operator != "custom" and operator not in OP_METADATA:
-        raise ValueError(f'Unknown operator "{operator}".')
-    if operator == "custom":
+    if operator == "Custom":
         if custom_latex is None or not custom_latex.strip():
             raise ValueError(
-                'Attribute "operator-latex" is required when operator="custom".'
+                'Attribute "operator-latex" is required when operator="Custom".'
             )
         operator_latex = custom_latex.strip()
     else:
@@ -475,67 +416,52 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
         operator_latex = (
             custom_latex.strip() if custom_latex is not None else metadata.tex
         )
-    limits: LimitFormat | Literal["auto"] | str = (
-        pl.get_string_attrib(element, "limits", "auto") or "auto"
-    )
-    if limits == "auto":
-        if inferred_operator == operator and inferred_limits:
-            limits = inferred_limits
-        elif operator == "custom":
-            raise ValueError(
-                'Custom operators require a parseable whole correct answer or explicit limits="bounds", limits="domain", or limits="approach".'
-            )
-        else:
-            limits = OP_METADATA[operator].default_limit
-    allowed = (
-        frozenset(("bounds", "domain", "approach"))
-        if operator == "custom"
-        else OP_METADATA[operator].valid_limits
-    )
-    if limits not in allowed:
+    allowed = pbo.get_valid_big_operator_indexing(operator)
+    if indexing not in allowed:
         raise ValueError(
-            f'Operator "{operator}" does not support limits="{limits}"; use {", ".join(sorted(allowed))}.'
+            f'Operator "{operator}" does not support indexing="{indexing}"; use {", ".join(sorted(allowed))}.'
         )
     body_size = pl.get_integer_attrib(element, "body-size", BODY_SIZE_DEFAULT)
-    if body_size is None or body_size < 1:
+    if body_size < 1:
         raise ValueError('Attribute "body-size" must be positive.')
-    default_limit_size = (
-        BOUNDS_LIMIT_SIZE_DEFAULT
-        if limits == "bounds"
-        else ANNOTATION_LIMIT_SIZE_DEFAULT
+    default_index_field_size = (
+        BOUNDS_INDEX_FIELD_SIZE_DEFAULT
+        if indexing == "bounds"
+        else ANNOTATION_INDEX_FIELD_SIZE_DEFAULT
     )
-    limit_size = pl.get_integer_attrib(element, "limit-size", default_limit_size)
-    if limit_size is None or limit_size < 1:
-        raise ValueError('Attribute "limit-size" must be positive.')
+    index_field_size = pl.get_integer_attrib(
+        element, "index-field-size", default_index_field_size
+    )
+    if index_field_size < 1:
+        raise ValueError('Attribute "index-field-size" must be positive.')
     grading: GradingMethod | str = (
         pl.get_string_attrib(element, "grading-method", "equivalent") or "equivalent"
     )
     if grading not in GRADING_METHODS:
         raise ValueError(
-            'Attribute "grading-method" must be exact, component, or equivalent.'
+            'Attribute "grading-method" must be exact, component, equivalent, or none.'
         )
     body_weight = pl.get_integer_attrib(element, "body-relative-weight", 3)
-    if body_weight is None or body_weight < 1:
+    if body_weight < 1:
         raise ValueError('Attribute "body-relative-weight" must be positive.')
-    direction_attribute = pl.get_string_attrib(element, "limit-direction", None)
     direction = (
-        direction_attribute
-        or (
-            _infer_direction(raw_correct, operator)
-            if limits == "approach" and not supplied_components
-            else None
-        )
-        or "two-sided"
+        _parse_direction(raw_correct, operator)
+        if indexing == "approaches"
+        else "two-sided"
     )
-    if direction not in DIRECTION_SYMBOLS:
-        raise ValueError(f'Unknown limit-direction "{direction}".')
-    direction_input_attribute = "allow-limit-direction-input" in element.attrib
-    if direction_input_attribute and limits != "approach":
+    if direction is None:
         raise ValueError(
-            'Attribute "allow-limit-direction-input" can only be used with limits="approach".'
+            "Correct answer approaches limit must include a valid direction."
         )
-    allow_direction_input = bool(
-        pl.get_boolean_attrib(element, "allow-limit-direction-input", True)
+    approach_direction_input_attribute = (
+        "allow-approach-direction-input" in element.attrib
+    )
+    if approach_direction_input_attribute and indexing != "approaches":
+        raise ValueError(
+            'Attribute "allow-approach-direction-input" can only be used with indexing="approaches".'
+        )
+    allow_direction_input = pl.get_boolean_attrib(
+        element, "allow-approach-direction-input", indexing == "approaches"
     )
     variables = _get_tuple_attrib(element, "variables")
     custom_functions = _get_tuple_attrib(element, "custom-functions")
@@ -544,167 +470,142 @@ def _config(html: str, data: pl.QuestionData | None = None) -> Config:
     )
     if allowed_blank not in ALLOWED_BLANKS:
         raise ValueError(
-            'Attribute "allowed-blank" must be none, limits, body, or all.'
+            'Attribute "allowed-blank" must be none, indices, body, or all.'
         )
-    components = COMPONENTS_MAP[limits]
-    irrelevant = set(supplied_components) - set(components)
-    if irrelevant:
-        attributes = ", ".join(
-            CORRECT_COMPONENT_ATTRIBUTES[component]  # type: ignore
-            for component in irrelevant
-        )
+    if operator == "Custom" and grading == "equivalent":
         raise ValueError(
-            f'Correct-answer attribute(s) {attributes} cannot be used with limits="{limits}".'
+            'Custom operators with a correct answer do not support grading-method="equivalent".'
         )
-    if supplied_components and set(supplied_components) != set(components):
-        missing = ", ".join(
-            CORRECT_COMPONENT_ATTRIBUTES[component]
-            for component in components
-            if component not in supplied_components
-        )
-        raise ValueError(
-            f"Component correct answers must supply every visible field; missing {missing}."
-        )
-    if correct_attribute is not None and supplied_components:
-        raise ValueError(
-            'Use either "correct-answer" or component correct-answer attributes, not both.'
-        )
-    if (
-        operator == "custom"
-        and (correct_attribute is not None or supplied_components)
-        and grading not in {"exact", "component"}
-    ):
-        raise ValueError(
-            'Custom operators with a correct answer require grading-method="exact" or "component".'
-        )
-    return Config(
-        answer,
-        operator,
-        operator_latex,
-        limits,
-        index,
-        variables,
-        custom_functions,
-        direction,
-        allow_direction_input,
-        allowed_blank,
-        pl.get_boolean_attrib(element, "allow-complex", False),
-        pl.get_boolean_attrib(element, "show-help-text", True),
-        body_size,
-        limit_size,
-        grading,
-        body_weight,
-        pl.get_integer_attrib(element, "weight", 1),
-        correct_attribute,
-        tuple((component, supplied_components[component]) for component in components)
-        if supplied_components
-        else (),
+    imaginary_unit = pl.get_string_attrib(
+        element,
+        "imaginary-unit-for-display",
+        IMAGINARY_UNIT_FOR_DISPLAY_DEFAULT,
+    )
+    if imaginary_unit not in {"i", "j"}:
+        raise ValueError('Attribute "imaginary-unit-for-display" must be i or j.')
+    return RenderConfig(
+        answer_name=answer,
+        operator=operator,
+        operator_latex=operator_latex,
+        has_operator_latex_override=custom_latex is not None,
+        prefix_latex=pl.get_string_attrib(element, "prefix-latex", None),
+        suffix_latex=pl.get_string_attrib(element, "suffix-latex", None),
+        indexing=indexing,
+        index=index,
+        variables=variables,
+        custom_functions=custom_functions,
+        direction=direction,
+        allow_direction_input=allow_direction_input,
+        allowed_blank=allowed_blank,
+        display=pl.get_enum_attrib(element, "display", DisplayType, DISPLAY_DEFAULT),
+        allow_complex=pl.get_boolean_attrib(element, "allow-complex", False),
+        imaginary_unit=imaginary_unit,
+        display_log_as_ln=pl.get_boolean_attrib(
+            element, "display-log-as-ln", DISPLAY_LOG_AS_LN_DEFAULT
+        ),
+        show_help_text=pl.get_boolean_attrib(element, "show-help-text", True),
+        body_size=body_size,
+        index_field_size=index_field_size,
+        grading=grading,
+        body_weight=body_weight,
+        weight=pl.get_integer_attrib(element, "weight", 1),
+        correct_attribute=correct_attribute,
     )
 
 
-def _decode(value: Any, variables: tuple[str, ...] = ()) -> sympy.Expr:
-    local_symbols = {name: sympy.Symbol(name) for name in variables}
-    locals = {
-        "_Exp1": sympy.E,
-        "_ImaginaryUnit": sympy.I,
-        **local_symbols,
-    }
+def _coerce_sympy(value: Any) -> psu.SympyValue:
     match value:
-        case {"_type": "sympy", "_value": str(source)}:
-            # Canonical leaves are trusted author answers. PrairieLearn's
-            # student-input parser cannot round-trip every value emitted by
-            # sympy_to_json: binder tuples look like intervals, and Boolean
-            # relations are rejected by its expression allowlist.
-            try:
-                return psu.json_to_sympy(cast(Any, value), allow_sets=True)
-            except Exception:  # noqa: BLE001 -- compatibility with the pinned PSU serializer.
-                # TODO(parser-migration.md, upstream PSU canonical decoder): remove this trusted-author-only
-                # fallback when json_to_sympy round-trips binders and relations emitted
-                # by sympy_to_json. Student answers never enter _decode.
-                return sympy.sympify(source, locals=locals)  # type: ignore[call-overload]
-
-        case str():
-            raise ValueError(
-                "Bare mathematical strings must use the PrairieLearn parser."
+        case dict(d) if psu.is_sympy_json(d):
+            serialized_variables = value.get("_variables")
+            allow_complex = not (
+                isinstance(serialized_variables, list)
+                and any(name in {"i", "j"} for name in serialized_variables)
+            )
+            return psu.json_to_sympy(
+                d,
+                allow_complex=allow_complex,
+                allow_sets=True,
+                allow_trig_functions=True,
             )
 
-        case _:
+        case sympy.Expr() | sympy.Set():
             return value
 
+        case _:
+            raise TypeError(
+                "Mathematical values must be SymPy expressions or dictionaries."
+            )
 
-def _json(value: sympy.Basic) -> dict[str, Any]:
-    return cast(dict[str, Any], psu.sympy_to_json(cast(Any, value), allow_sets=True))
+
+def _as_sympy(value: Any) -> psu.SympyValue | None:
+    try:
+        return _coerce_sympy(value)
+    except (TypeError, ValueError):
+        return None
 
 
-def _canonical(
-    config: Config,
-    values: dict[str, sympy.Basic],
-    direction: str | None = None,
-) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "_type": "operator_expression",
+def _sympy_json(value: sympy.Basic) -> SympyJson:
+    return psu.sympy_to_json(
+        cast(Any, value),
+        allow_sets=True,
+        allow_complex=True,
+        allow_trig_functions=True,
+    )
+
+
+def _canonical_json(
+    config: RenderConfig,
+    values: ResponseValues,
+    *,
+    index: sympy.Symbol | None = None,
+    direction: DirectionName | None = None,
+) -> BigOperatorJson:
+    result = {
+        "_type": "big_operator",
         "_version": 1,
         "operator": config.operator,
-        "limits": config.limits,
-        "index": _json(sympy.Symbol(config.index)),
+        "indexing": config.indexing,
+        "index": _sympy_json(
+            index if index is not None else sympy.Symbol(config.index)
+        ),
     }
-    if config.operator == "custom":
-        result["operator_latex"] = config.operator_latex
-    result.update({key: _json(values[key]) for key in config.components})
-    if config.limits == "approach":
+    result.update({key: _sympy_json(values[key]) for key in config.components})
+    if config.indexing == "approaches":
         result["direction"] = direction or config.direction
-    return result
+    return result  # type: ignore
 
 
-def _structured(config: Config, value: dict[str, Any]) -> dict[str, Any]:
-    keys = {"_type", "_version", "operator", "limits", "index", *config.components}
-    if config.operator == "custom":
-        keys.add("operator_latex")
-    if config.limits == "approach":
-        keys.add("direction")
-    if (
-        set(value) != keys
-        or value.get("_type") != "operator_expression"
-        or value.get("_version") != 1
-    ):
-        raise ValueError(
-            "Correct answer is not a well-formed version 1 operator expression."
-        )
-    if value["operator"] != config.operator or value["limits"] != config.limits:
-        raise ValueError(
-            "Correct answer operator or limits form does not match the element."
-        )
-    if config.operator == "custom" and value["operator_latex"] != config.operator_latex:
-        raise ValueError(
-            "Correct answer custom operator does not match operator-latex."
-        )
-    if config.limits == "approach" and value["direction"] != config.direction:
-        raise ValueError("Correct answer direction does not match limit-direction.")
-    if _decode(value["index"], (config.index,)) != sympy.Symbol(config.index):
-        raise ValueError("Correct answer index does not match index-variable.")
-    values = {
-        key: _decode(
-            value[key],
-            tuple(dict.fromkeys((*config.variables, config.index)))
-            if key == "body"
-            else config.variables,
-        )
-        for key in config.components
-    }
-    if not all(isinstance(item, sympy.Basic) for item in values.values()):
-        raise ValueError(
-            "Every mathematical component must be PrairieLearn SymPy JSON."
-        )
-    _validate_component_values(config, cast(dict[str, sympy.Basic], values))
-    return _canonical(config, cast(dict[str, sympy.Basic], values))
+def _get_values(config: RenderConfig, big_op: BigOperator) -> ResponseValues:
+    match config.indexing:
+        case "bounds":
+            if big_op["indexing"] != "bounds":
+                raise ValueError("Big operator indexing does not match the element.")
+            return {
+                "lower": big_op["lower"],
+                "upper": big_op["upper"],
+                "body": big_op["body"],
+            }
+        case "domain":
+            if big_op["indexing"] != "domain":
+                raise ValueError("Big operator indexing does not match the element.")
+            return {"domain": big_op["domain"], "body": big_op["body"]}
+        case "approaches":
+            if big_op["indexing"] != "approaches":
+                raise ValueError("Big operator indexing does not match the element.")
+            return {"target": big_op["target"], "body": big_op["body"]}
 
 
-def _validate_component_values(config: Config, values: dict[str, sympy.Basic]) -> None:
+def _validate_component_values(config: RenderConfig, values: ResponseValues) -> None:
     allowed = set(config.variables) | {config.index}
     for component, item in values.items():
-        if _requires_set(config, cast(Component, component)) and not _is_set_input(
-            item
-        ):
+        type_failure = psu.check_sympy_types(
+            item, _component_allowed_types(config, component)
+        )
+        if type_failure is not None:
+            raise ValueError(
+                f'Correct answer component "{component}" must be an expression.'
+            )
+        if _requires_set(config, component) and not _is_set_input(item):
             raise ValueError(f'Correct answer component "{component}" must be a set.')
         undeclared = {str(symbol) for symbol in item.free_symbols} - allowed
         if undeclared:
@@ -718,155 +619,148 @@ def _validate_component_values(config: Config, values: dict[str, sympy.Basic]) -
             )
 
 
-def _component_values(config: Config, value: dict[Component, Any]) -> dict[str, Any]:
-    values: dict[str, sympy.Basic] = {}
-    for component in config.components:
-        raw = value[component]
-        variables = (
-            tuple(dict.fromkeys((*config.variables, config.index)))
-            if component == "body"
-            else config.variables
-        )
-        if isinstance(raw, str):
-            try:
-                parsed = _parse(raw, variables, config.custom_functions)
-            except _ParseError as exc:
-                raise ValueError(
-                    f'Parsing correct answer component "{component}" failed.'
-                ) from exc._src
-        else:
-            try:
-                parsed = _decode(raw, variables)
-            except Exception as exc:
-                raise ValueError(
-                    f'Decoding correct answer component "{component}" failed.'
-                ) from exc
-        if not isinstance(parsed, sympy.Basic):
-            raise TypeError(
-                f'Correct answer component "{component}" must be a SymPy value or parseable string.'
+def _sympy_to_big_operator_json(
+    config: RenderConfig, value: sympy.Basic
+) -> BigOperatorJson | None:
+    match config.operator:
+        case "Limit":
+            if not isinstance(value, sympy.Limit):
+                return None
+            if len(value.args) != 4:
+                raise ValueError("Correct answer Limit has an invalid structure.")
+            body, index, target, _ = value.args
+            if not isinstance(index, sympy.Symbol):
+                raise TypeError("Correct answer index must be a symbol.")
+            return _canonical_json(
+                config,
+                {"target": target, "body": body},
+                index=index,
             )
-        if _requires_set(config, component) and not _is_set_input(parsed):
-            raise ValueError(f'Correct answer component "{component}" must be a set.')
-        values[component] = parsed
-    return _canonical(config, values)
 
+        case "Sum":
+            if not isinstance(value, sympy.Sum):
+                return None
+        case "Product":
+            if not isinstance(value, sympy.Product):
+                return None
+        case "Integral":
+            if not isinstance(value, sympy.Integral):
+                return None
+        case _:
+            return None
 
-def _binder(config: Config, value: Any) -> dict[str, Any] | None:
-    expected = {
-        "sum": sympy.Sum,
-        "product": sympy.Product,
-        "integral": sympy.Integral,
-        "limit": sympy.Limit,
-    }.get(config.operator)
-    if expected is None or not isinstance(value, expected):
-        return None
-    index = sympy.Symbol(config.index)
-    match config.operator, config.limits:
-        case "limit", _:
-            body, variable, target, direction = value.args
-            if variable != index:
-                raise ValueError("Correct answer index does not match index-variable.")
-            public = DIRECTION_NAMES.get(str(direction))  # type: ignore
-            if public != config.direction:
-                raise ValueError(
-                    "Correct answer Limit direction does not match limit-direction."
-                )
-            return _canonical(config, {"target": target, "body": body})
-
-        case _, limits_format:
-            expected_length = 3 if limits_format == "bounds" else 2
-    if len(value.limits) != 1 or len(value.limits[0]) != expected_length:
+    if len(value.args) != 2 or not isinstance(value.args[1], sympy.Tuple):
+        raise ValueError("Correct answer must have exactly one indexing tuple.")
+    indexing_values = value.args[1].args
+    expected_length = 3 if config.indexing == "bounds" else 2
+    if len(indexing_values) != expected_length:
         raise ValueError(
-            f'Correct answer for limits="{config.limits}" must have exactly one '
-            f"{expected_length}-item limits tuple."
+            f'Correct answer for indexing="{config.indexing}" must have exactly one '
+            f"{expected_length}-item indexing tuple."
         )
-    variable, *binder_values = value.limits[0]
-    if variable != index:
-        raise ValueError("Correct answer index does not match index-variable.")
-    match config.limits:
+    body = value.args[0]
+    index = indexing_values[0]
+    if not isinstance(index, sympy.Symbol):
+        raise TypeError("Correct answer index must be a symbol.")
+    match config.indexing:
         case "bounds":
-            return _canonical(
+            return _canonical_json(
                 config,
                 {
-                    "lower": binder_values[0],
-                    "upper": binder_values[1],
-                    "body": value.function,
+                    "lower": indexing_values[1],
+                    "upper": indexing_values[2],
+                    "body": body,
                 },
+                index=index,
             )
         case "domain":
-            return _canonical(
-                config, {"domain": binder_values[0], "body": value.function}
+            return _canonical_json(
+                config,
+                {"domain": indexing_values[1], "body": body},
+                index=index,
             )
-        case "approach":
+        case "approaches":
             raise ValueError(
-                f'Correct answer operator does not support limits="{config.limits}".'
+                f"Correct answer operator does not support indexing={config.indexing!r}."
             )
 
 
-def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
-    formatted = _formatted_call(source, _operator_fn_name(config.operator))
-    if formatted is None and config.operator == "limit":
-        formatted = _legacy_limit_call(source)
+def _answer_json(
+    config: RenderConfig,
+    source: str,
+    assumptions: psu.AssumptionsDictT | None = None,
+) -> BigOperatorJson | None:
+    formatted = _formatted_call(source, config.operator)
+    if formatted is None and config.operator == "Limit":
+        formatted = _parse_sympy_limit_call(source)
     if formatted is None:
         return None
-    body_source, limits = formatted
-    match config.limits:
+    body_source, indexing_args = formatted
+    match config.indexing:
         case "domain":
             expected_length = 2
-        case "bounds" | "approach":
+        case "bounds" | "approaches":
             expected_length = 3
-    if len(limits) != expected_length:
+    if len(indexing_args) != expected_length:
         raise ValueError(
-            f'Correct answer for limits="{config.limits}" requires a '
-            f"{expected_length}-item limits tuple."
+            f'Correct answer for indexing="{config.indexing}" requires a '
+            f"{expected_length}-item indexing tuple."
         )
     try:
-        body = _parse(
+        body = _unchecked_parse_sympy(
             body_source,
             tuple(dict.fromkeys((*config.variables, config.index))),
             config.custom_functions,
+            allow_complex=config.allow_complex,
+            assumptions=assumptions,
         )
     except _ParseError as exc:
         raise ValueError(
             "The correct answer contains invalid SymPy data."
         ) from exc._src
-    index_name = _identifier(limits[0])
-    if index_name != config.index:
-        raise ValueError("Correct answer index does not match index-variable.")
-
+    values: ResponseValues
     try:
-        match config.limits:
-            case "approach":
-                direction = _formatted_direction(limits)
-                if direction is None:
+        match config.indexing:
+            case "approaches":
+                direction = _direction_symbol_from_args(indexing_args)
+                if direction not in DIRECTION_NAMES:
                     raise ValueError('Limit direction must be "+", "-", or "+-".')
-                public_direction = DIRECTION_NAMES.get(direction)
-                if public_direction is None:
-                    raise ValueError('Limit direction must be "+", "-", or "+-".')
-                if public_direction != config.direction:
-                    raise ValueError(
-                        "Correct answer direction does not match limit-direction."
-                    )
                 values = {
-                    "target": _parse(
-                        limits[1], config.variables, config.custom_functions
+                    "target": _unchecked_parse_sympy(
+                        indexing_args[1],
+                        config.variables,
+                        config.custom_functions,
+                        allow_complex=config.allow_complex,
+                        assumptions=assumptions,
                     ),
                     "body": body,
                 }
             case "bounds":
                 values = {
-                    "lower": _parse(
-                        limits[1], config.variables, config.custom_functions
+                    "lower": _unchecked_parse_sympy(
+                        indexing_args[1],
+                        config.variables,
+                        config.custom_functions,
+                        allow_complex=config.allow_complex,
+                        assumptions=assumptions,
                     ),
-                    "upper": _parse(
-                        limits[2], config.variables, config.custom_functions
+                    "upper": _unchecked_parse_sympy(
+                        indexing_args[2],
+                        config.variables,
+                        config.custom_functions,
+                        allow_complex=config.allow_complex,
+                        assumptions=assumptions,
                     ),
                     "body": body,
                 }
             case "domain":
                 values = {
-                    "domain": _parse(
-                        limits[1], config.variables, config.custom_functions
+                    "domain": _unchecked_parse_sympy(
+                        indexing_args[1],
+                        config.variables,
+                        config.custom_functions,
+                        allow_complex=config.allow_complex,
+                        assumptions=assumptions,
                     ),
                     "body": body,
                 }
@@ -874,130 +768,202 @@ def _formatted_answer(config: Config, source: str) -> dict[str, Any] | None:
         raise ValueError(
             "The correct answer contains invalid SymPy data."
         ) from exc._src
-    _validate_component_values(config, values)
-    return _canonical(config, values)
+    index = sympy.Symbol(config.index, **(assumptions or {}).get(config.index, {}))
+    return _canonical_json(config, values, index=index)
 
 
-def _correct(config: Config, data: pl.QuestionData) -> dict[str, Any] | None:
-    raw = _raw_correct_answer(
-        config.answer,
-        config.correct_attribute,
-        dict(config.correct_components),
-        data,
-    )
+def _validate_correct(
+    config: RenderConfig, correct: dict[str, Any] | BigOperatorJson
+) -> BigOperatorJson:
+    big_op = pbo.json_to_big_operator(correct)
+    _validate_component_values(config, _get_values(config, big_op))
+    return correct  # type: ignore
+
+
+def _correct(config: RenderConfig, data: QuestionData) -> BigOperatorJson:
+    raw = _raw_correct_answer(config.answer_name, config.correct_attribute, data)
+    if config.operator == "Custom" and config.grading == "equivalent":
+        raise ValueError(
+            'Custom operators with a correct answer do not support grading-method="equivalent".'
+        )
+
+    json: BigOperatorJson | None
+    match raw:
+        case None:
+            raise ValueError(
+                f'Correct answer "{config.answer_name}" is required to configure the big operator.'
+            )
+        case {"_type": "big_operator"}:
+            big_op = pbo.json_to_big_operator(raw)
+            values = _get_values(config, big_op)
+            json = _canonical_json(config, values, index=big_op["index"])
+        case dict() if psu.is_sympy_json(raw):
+            json = _answer_json(config, raw["_value"], raw.get("_assumptions"))
+        case str():
+            json = _answer_json(config, raw)
+        case _:
+            json = _sympy_to_big_operator_json(config, _coerce_sympy(raw))
+
+    if json is None:
+        raise TypeError(
+            f'Correct answer "{config.answer_name}" must be a matching formatted object or canonical structured dictionary.'
+        )
+    return _validate_correct(config, json)
+
+
+def prepare(element_html: str, data: QuestionData) -> None:
+    element = lxml.html.fragment_fromstring(element_html)
+    pl.validate_element(element, SCHEMA_PATH)
+    config = _config(element_html, data)
+    pl.check_answers_names(data, config.answer_name)
     if (
-        config.operator == "custom"
-        and raw is not None
-        and config.grading not in {"exact", "component"}
+        config.correct_attribute is not None
+        and config.answer_name in data["correct_answers"]
     ):
         raise ValueError(
-            'Custom operators with a correct answer require grading-method="exact" or "component".'
+            f"duplicate correct_answers variable name: {config.answer_name}"
         )
-    if raw is None:
-        return None
-    if isinstance(raw, dict) and raw.get("_type") == "operator_expression":  # type: ignore
-        return _structured(config, raw)  # type: ignore
-    if config.correct_components:
-        return _component_values(config, cast(dict[Component, Any], raw))
-    if isinstance(raw, str):
-        converted = _formatted_answer(config, raw)
-        if converted is not None:
-            return converted
-        if config.operator == "limit" and re.match(r"^\s*Limit\s*\(", raw):
-            raise ValueError("The correct answer has an invalid Limit wrapper.")
-        raise TypeError(
-            f'Correct answer "{config.answer}" must be a matching formatted object or canonical structured dictionary.'
-        )
-    value = _decode(raw, tuple(dict.fromkeys((*config.variables, config.index))))
-    converted = _binder(config, value)
-    if converted is not None:
-        return converted
-    raise TypeError(
-        f'Correct answer "{config.answer}" must be a matching formatted object or canonical structured dictionary.'
-    )
-
-
-def prepare(element_html: str, data: pl.QuestionData) -> None:
-    config = _config(element_html, data)
-    pl.check_answers_names(data, config.answer)
     correct = _correct(config, data)
-    if correct is not None:
-        data.setdefault("correct_answers", {})[config.answer] = correct
+    if config.grading == "equivalent":
+        _validate_equivalent_configuration(config, correct)
+    data.setdefault("correct_answers", {})[config.answer_name] = correct
 
 
-def _field(
-    config: Config,
-    component: str,
-    label: str,
+def _render_symbolic_input(
+    data: QuestionData,
+    *,
+    name: str,
+    variables: tuple[str, ...],
+    custom_functions: tuple[str, ...],
+    aria_label: str,
     size: int,
-    data: pl.QuestionData,
+    allowed_types: set[AllowedSympyType],
+    allow_complex: bool,
+    imaginary_unit: str,
+    display_log_as_ln: bool,
+    show_help_text: bool = False,
+    show_score: bool = False,
     prefix: str | None = None,
     suffix: str | None = None,
     score: float | None = None,
-) -> dict[str, Any]:
-    name = config.name(component)
+) -> tuple[str, QuestionData]:
+    config = psi.RenderConfig(
+        # passed-through
+        name=name,
+        label=prefix,
+        aria_label=aria_label,
+        suffix=suffix,
+        variables=list(variables),
+        initial_value_variables=list(variables),
+        custom_functions=list(custom_functions),
+        allow_complex=allow_complex,
+        allowed_types=allowed_types,
+        size=size,
+        show_score=show_score,
+        show_info=show_help_text,
+        display_log_as_ln=display_log_as_ln,
+        imaginary_unit=imaginary_unit,
+        # fixed
+        display=DisplayType.INLINE,
+        placeholder="",
+        allow_trig=True,
+        simplify_expression=True,
+        formula_editor=True,
+        show_score_percent=False,
+        initial_value=None,
+    )
+
+    # create a defensive-copied view over data with tweaked values
+    view = copy.deepcopy(data)
+    if score is not None:
+        view["partial_scores"][name] = {"score": score}
+
+    template = SYMBOLIC_INPUT_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    html = psi.render_with_config(config, view, template=template)
+
+    return html, view
+
+
+def _symbolic_field(
+    config: RenderConfig,
+    *,
+    data: QuestionData,
+    component: Component,
+    label: str,
+    size: int,
+    prefix: str | None = None,
+    suffix: str | None = None,
+    score: float | None = None,
+) -> dict[Literal["html"], str]:
+    name = config.component_name(component)
     variables = (
         tuple(dict.fromkeys((*config.variables, config.index)))
         if component == "body"
         else config.variables
     )
-    field_markup = symbolic_input_adapter.markup(
+    html, _view = _render_symbolic_input(
+        data,
         name=name,
         variables=variables,
         custom_functions=config.custom_functions,
-        label=label,
+        aria_label=label,
         size=size,
-        allow_sets=_requires_set(config, cast(Component, component)),
+        allowed_types=_component_allowed_types(config, component),
         allow_complex=config.allow_complex,
+        imaginary_unit=config.imaginary_unit,
+        display_log_as_ln=config.display_log_as_ln,
         show_help_text=component == "body" and config.show_help_text,
         show_score=config.grading == "component",
         prefix=prefix,
         suffix=suffix,
+        score=score,
     )
-    return {
-        "html": symbolic_input_adapter.render(
-            field_markup, data, aria_label=label, score=score
-        ),
-    }
+    return {"html": html}
 
 
-def _component_scores(config: Config, data: pl.QuestionData) -> dict[str, float]:
-    if config.grading != "component" or config.answer not in data.get(
+def _component_scores(config: RenderConfig, data: QuestionData) -> dict[str, float]:
+    if config.grading != "component" or config.answer_name not in data.get(
         "partial_scores", {}
     ):
         return {}
-    submitted_json = data.get("submitted_answers", {}).get(config.answer)
+    if config.answer_name in data.get("format_errors", {}):
+        return {}
+    submitted_json = data.get("submitted_answers", {}).get(config.answer_name)
     correct_json = _correct(config, data)
-    if not isinstance(submitted_json, dict) or correct_json is None:
+    if not isinstance(submitted_json, dict):
         return {}
-    try:
-        submitted = _values(config, submitted_json)
-        correct = _values(config, correct_json)
-    except (KeyError, TypeError, ValueError):
-        return {}
-    scores = {
-        component: float(
-            _expressions_equivalent(submitted[component], correct[component])
-        )
-        for component in config.components
-    }
-    if config.limits == "approach" and config.allow_direction_input:
-        scores["direction"] = float(
-            submitted_json.get("direction") == correct_json.get("direction")
-        )
-    return scores
+    scores: dict[str, float] = {}
+    with SignalTimeout(SYMPY_TIMEOUT) as timeout:
+        try:
+            submitted = _values(config, submitted_json)
+            correct = _values(config, correct_json)
+        except (KeyError, TypeError, ValueError):
+            return {}
+        scores = {
+            component: float(
+                _expressions_equivalent(submitted[component], correct[component])
+            )
+            for component in config.components
+        }
+        if config.indexing == "approaches" and config.allow_direction_input:
+            scores["direction"] = float(
+                submitted_json.get("direction") == correct_json.get("direction")
+            )
+    return {} if timeout.state == TimeoutState.TIMED_OUT else scores
 
 
 def _direction_input(
-    config: Config, data: pl.QuestionData, score: float | None
+    config: RenderConfig, data: QuestionData, score: float | None
 ) -> dict[str, Any]:
-    name = config.name("direction")
+    name = config.component_name("direction")
     raw_value = str(data.get("raw_submitted_answers", {}).get(name, ""))
     has_error = name in data.get("format_errors", {})
     return {
         "name": name,
         "invalid": has_error,
         "feedback": data.get("format_errors", {}).get(name),
+        "feedback_id": f"{name}-feedback",
         "options": [
             {"value": value, "label": label, "selected": raw_value == value}
             for value, label in (
@@ -1011,75 +977,73 @@ def _direction_input(
 
 
 def _render_mustache(
-    context: dict[str, Any], *, template: Literal["main", "submission"]
+    context: dict[str, Any], *, mode: Literal["question", "submission"]
 ) -> str:
-    match template:
-        case "main":
-            stub = "pl-big-operator-input.mustache"
-        case "submission":
-            stub = "pl-big-operator-input-submission.mustache"
     return chevron.render(
-        (HERE / stub).read_text(),
-        context,
+        (HERE / "pl-big-operator-input.mustache").read_text(),
+        {**context, mode: True},
         partials_path=str(HERE / "partials"),
         partials_ext="mustache",
     )
 
 
-def _question_mustache(config: Config, data: pl.QuestionData) -> str:
+def _question_mustache(config: RenderConfig, data: QuestionData) -> str:
     index = sympy.latex(sympy.Symbol(config.index))
     component_scores = _component_scores(config, data)
     context: dict[str, Any] = {
-        config.limits: True,
-        "integral": config.operator == "integral",
-        "operator_latex": config.operator_latex,
+        config.indexing: True,
+        config.display.value: True,
+        "integral": config.operator == "Integral",
+        "operator_latex": _operator_tex(config),
+        "prefix_latex": config.prefix_latex,
+        "suffix_latex": config.suffix_latex,
         "index_label": index,
         "body_size": config.body_size,
-        "limit_size": config.limit_size,
-        "body_field": _field(
+        "index_field_size": config.index_field_size,
+        "body_field": _symbolic_field(
             config,
-            "body",
-            "Operator body",
-            config.body_size,
-            data,
+            component="body",
+            label="Operator body",
+            size=config.body_size,
+            data=data,
             score=component_scores.get("body"),
         ),
     }
-    partial_score = data.get("partial_scores", {}).get(config.answer)
+    partial_score = data.get("partial_scores", {}).get(config.answer_name)
     if partial_score is not None:
         context["score_badge"] = _score_badge(float(partial_score.get("score") or 0))
-    match config.limits:
+    match config.indexing:
         case "bounds":
-            context["lower_field"] = _field(
+            context["lower_field"] = _symbolic_field(
                 config,
-                "lower",
-                "Lower bound",
-                config.limit_size,
-                data,
-                None if config.operator == "integral" else rf"\({index} = \)",
+                component="lower",
+                label="Lower bound",
+                size=config.index_field_size,
+                data=data,
+                prefix=None if config.operator == "Integral" else rf"\({index} = \)",
                 score=component_scores.get("lower"),
             )
-            context["upper_field"] = _field(
+            context["upper_field"] = _symbolic_field(
                 config,
-                "upper",
-                "Upper bound",
-                config.limit_size,
-                data,
+                component="upper",
+                label="Upper bound",
+                size=config.index_field_size,
+                data=data,
                 score=component_scores.get("upper"),
             )
         case "domain":
-            context["annotation_field"] = _field(
+            context["annotation_field"] = _symbolic_field(
                 config,
-                "domain",
-                "Integration domain"
-                if config.operator == "integral"
+                component="domain",
+                label="Integration domain"
+                if config.operator == "Integral"
                 else "Index domain",
-                config.limit_size,
-                data,
-                None if config.operator == "integral" else rf"\({index} \in \)",
+                size=config.index_field_size,
+                data=data,
+                prefix=None if config.operator == "Integral" else rf"\({index} \in \)",
                 score=component_scores.get("domain"),
             )
-        case "approach":
+        case "approaches":
             direction_score = component_scores.get("direction")
             if config.allow_direction_input:
                 context["direction_input"] = _direction_input(
@@ -1088,43 +1052,51 @@ def _question_mustache(config: Config, data: pl.QuestionData) -> str:
             direction_suffix = (
                 None
                 if config.allow_direction_input
-                else {"two-sided": None, "from-left": "−", "from-right": "+"}[
+                else {"two-sided": None, "from-left": "-", "from-right": "+"}[
                     config.direction
                 ]
             )
-            context["annotation_field"] = _field(
+            context["annotation_field"] = _symbolic_field(
                 config,
-                "target",
-                "Approach target",
-                config.limit_size,
-                data,
-                rf"\({index} \to \)",
-                rf"\({{}}^{direction_suffix}\)" if direction_suffix else None,
+                component="target",
+                label="approaches target",
+                size=config.index_field_size,
+                data=data,
+                prefix=rf"\({index} \to \)",
+                suffix=rf"\({{}}^{direction_suffix}\)" if direction_suffix else None,
                 score=component_scores.get("target"),
             )
-    return _render_mustache(context, template="main")
+    return _render_mustache(context, mode="question")
 
 
-def _tex(config: Config, raw: dict[str, Any] | None) -> str:
+def _operator_tex(config: RenderConfig) -> str:
+    if config.has_operator_latex_override:
+        if config.operator == "Integral":
+            return rf"\mathop{{{config.operator_latex}}}\nolimits"
+        return rf"\mathop{{{config.operator_latex}}}\limits"
+    return config.operator_latex
+
+
+def _tex(config: RenderConfig, raw: dict[str, Any] | None) -> str:
     raw = raw or {}
-    get = lambda c: raw.get(config.name(c), "?")
+
+    def get_comp(c: Component) -> Any:
+        return raw.get(config.component_name(c), "?")
+
     index = sympy.latex(sympy.Symbol(config.index))
-    op = config.operator_latex
-    match config.operator:
-        case "custom":
-            op = rf"\mathop{{{op}}}\limits"
-    match config.limits, config.operator:
-        case "bounds", "integral":
-            return rf"{op}_{{{get('lower')}}}^{{{get('upper')}}} {get('body')}\,\mathrm{{d}}{index}"
+    op = _operator_tex(config)
+    match config.indexing, config.operator:
+        case "bounds", "Integral":
+            return rf"{op}_{{{get_comp('lower')}}}^{{{get_comp('upper')}}} {get_comp('body')}\,\mathrm{{d}}{index}"
         case "bounds", _:
-            return rf"{op}_{{{index}={get('lower')}}}^{{{get('upper')}}} {get('body')}"
-        case "domain", "integral":
-            return rf"{op}_{{{get('domain')}}} {get('body')}\,\mathrm{{d}}{index}"
+            return rf"{op}_{{{index}={get_comp('lower')}}}^{{{get_comp('upper')}}} {get_comp('body')}"
+        case "domain", "Integral":
+            return rf"{op}_{{{get_comp('domain')}}} {get_comp('body')}\,\mathrm{{d}}{index}"
         case "domain", _:
-            return rf"{op}_{{{index}\in {get('domain')}}} {get('body')}"
-        case "approach", _:
+            return rf"{op}_{{{index}\in {get_comp('domain')}}} {get_comp('body')}"
+        case "approaches", _:
             direction_value = (
-                str(raw.get(config.name("direction"), ""))
+                str(raw.get(config.component_name("direction"), ""))
                 if config.allow_direction_input
                 else config.direction
             )
@@ -1133,25 +1105,72 @@ def _tex(config: Config, raw: dict[str, Any] | None) -> str:
                 "from-left": "^-",
                 "from-right": "^+",
             }.get(direction_value, "^?")
-            return rf"{op}_{{{index}\to {get('target')}{direction}}} {get('body')}"
+            return rf"{op}_{{{index}\to {get_comp('target')}{direction}}} {get_comp('body')}"
 
 
-def _structured_tex(config: Config, structured: dict[str, Any]) -> str:
+def _structured_tex(
+    config: RenderConfig, structured: BigOperatorJson | dict[str, Any]
+) -> str:
     values = _values(config, structured)
-    raw = {config.name(key): sympy.latex(value) for key, value in values.items()}
-    if config.limits == "approach" and config.allow_direction_input:
-        raw[config.name("direction")] = structured.get("direction", "")
+    raw = {
+        config.component_name(key): _expression_tex(config, value)
+        for key, value in values.items()
+    }
+    if config.indexing == "approaches" and config.allow_direction_input:
+        raw[config.component_name("direction")] = structured.get("direction", "")
     return _tex(config, raw)
 
 
-def _submitted_tex(config: Config, data: pl.QuestionData) -> str:
-    structured = data.get("submitted_answers", {}).get(config.answer)
+def _expression_tex(config: RenderConfig, value: sympy.Basic) -> str:
+    display_value = psi.replace_imaginary_for_display(
+        cast(sympy.Expr, value), config.imaginary_unit
+    )
+    if config.display_log_as_ln:
+        display_value = display_value.replace(sympy.log, sympy.Function("ln"))
+    return sympy.latex(display_value)
+
+
+def _parse_component_submission(
+    config: RenderConfig,
+    component: Component,
+    source: str | None,
+    assumptions: psu.AssumptionsDictT | None = None,
+) -> psi.SymbolicSubmissionParseResult:
+    variables = (
+        tuple(dict.fromkeys((*config.variables, config.index)))
+        if component == "body"
+        else config.variables
+    )
+    return psi.try_parse_symbolic_submission(
+        source,
+        variables,
+        formula_editor=True,
+        custom_functions=config.custom_functions,
+        allowed_types=_component_allowed_types(config, component),
+        allow_complex=config.allow_complex,
+        imaginary_unit=config.imaginary_unit,
+        assumptions=assumptions,
+    )
+
+
+def _submitted_tex(config: RenderConfig, data: QuestionData) -> str:
+    structured = data.get("submitted_answers", {}).get(config.answer_name)
     if isinstance(structured, dict):
         try:
             return _structured_tex(config, structured)
         except (KeyError, TypeError, ValueError):
             pass
-    return _tex(config, data.get("raw_submitted_answers"))
+    raw = data.get("raw_submitted_answers", {})
+    display_raw: dict[str, Any] = dict(raw)
+    for component in config.components:
+        name = config.component_name(component)
+        parsed = _parse_component_submission(
+            config, component, cast(str | None, raw.get(name))
+        )
+        if isinstance(parsed, psu.SympyParseFailure) or parsed.expr == "":
+            continue
+        display_raw[name] = _expression_tex(config, parsed.expr)
+    return _tex(config, display_raw)
 
 
 def _score_badge(score: float) -> dict[str, Any]:
@@ -1162,7 +1181,7 @@ def _score_badge(score: float) -> dict[str, Any]:
     return {"partial": round(score * 100)}
 
 
-def render(element_html: str, data: pl.QuestionData) -> str:
+def render(element_html: str, data: QuestionData) -> str:
     config = _config(element_html, data)
     panel = data.get("panel", "question")
     match panel:
@@ -1170,23 +1189,35 @@ def render(element_html: str, data: pl.QuestionData) -> str:
             return _question_mustache(config, data)
         case "answer":
             correct = _correct(config, data)
-            if correct is None:
-                return ""
             return _render_mustache(
-                {"tex": _structured_tex(config, correct)}, template="submission"
+                {
+                    config.display.value: True,
+                    "tex": _structured_tex(config, correct),
+                    "prefix_latex": config.prefix_latex,
+                    "suffix_latex": config.suffix_latex,
+                },
+                mode="submission",
             )
         case "submission":
-            context: dict[str, Any] = {"tex": _submitted_tex(config, data)}
-            partial_score = data.get("partial_scores", {}).get(config.answer)
+            context: dict[str, Any] = {
+                config.display.value: True,
+                "tex": _submitted_tex(config, data),
+                "prefix_latex": config.prefix_latex,
+                "suffix_latex": config.suffix_latex,
+            }
+            partial_score = data.get("partial_scores", {}).get(config.answer_name)
             if partial_score is not None:
                 context.update(_score_badge(float(partial_score.get("score") or 0)))
-            return _render_mustache(context, template="submission")
+            return _render_mustache(context, mode="submission")
 
 
-def _parse(
+def _unchecked_parse_sympy(
     source: str,
     variables: tuple[str, ...],
     custom_functions: tuple[str, ...] = (),
+    *,
+    allow_complex: bool = False,
+    assumptions: psu.AssumptionsDictT | None = None,
 ) -> sympy.Basic:
     source = re.sub(r"\binfinity\b", "infty", source)
     for name in ("sin", "cos", "tan", "sec", "csc", "cot"):
@@ -1196,19 +1227,28 @@ def _parse(
             source,
             variables,
             allow_hidden=True,
+            allow_complex=allow_complex,
             allow_sets=True,
             allow_trig_functions=True,
             custom_functions=custom_functions,
+            assumptions=assumptions,
         )
     except psu.BaseSympyError as exc:
         raise _ParseError(exc) from None
 
 
-def _requires_set(config: Config, component: Component) -> bool:
+def _requires_set(config: RenderConfig, component: Component) -> bool:
     return component == "domain" or (
         component == "body"
-        and config.operator in {"union", "intersection", "disjoint-union"}
+        and config.operator in {"Union", "Intersection", "DisjointUnion"}
     )
+
+
+def _component_allowed_types(
+    config: RenderConfig,
+    component: Component,
+) -> set[AllowedSympyType]:
+    return {"all" if _requires_set(config, component) else "expression"}
 
 
 def _is_set_input(value: sympy.Basic) -> bool:
@@ -1216,150 +1256,147 @@ def _is_set_input(value: sympy.Basic) -> bool:
     return isinstance(value, (sympy.Set, sympy.Symbol))
 
 
-def _component_allows_blank(config: Config, component: ResponseComponent) -> bool:
+def _component_allows_blank(config: RenderConfig, component: ResponseComponent) -> bool:
     return config.allowed_blank == "all" or (
         config.allowed_blank == "body"
         if component == "body"
-        else config.allowed_blank == "limits"
+        else config.allowed_blank == "indices"
     )
 
 
+def _component_assumptions(
+    correct: BigOperatorJson,
+    component: Component,
+) -> psu.AssumptionsDictT | None:
+    value = correct.get(component)
+    if not psu.is_sympy_json(value):
+        return None
+    return value.get("_assumptions")
+
+
 def _parse_values(
-    config: Config, data: pl.QuestionData
-) -> dict[str, sympy.Basic] | None:
-    submitted = data.setdefault("submitted_answers", {})
-    result: dict[str, sympy.Basic] = {}
+    config: RenderConfig,
+    data: QuestionData,
+    correct: BigOperatorJson,
+) -> ResponseValues | None:
+    result = {}
     raw_answers = data.get("raw_submitted_answers", {})
     for component in config.components:
-        name = config.name(component)
+        name = config.component_name(component)
         if not str(raw_answers.get(name, "")).strip() and _component_allows_blank(
             config, component
         ):
-            submitted[name] = ""
             continue
-        variables = (
-            tuple(dict.fromkeys((*config.variables, config.index)))
-            if component == "body"
-            else config.variables
+        requires_set = _requires_set(config, component)
+        parsed = _parse_component_submission(
+            config,
+            component,
+            cast(str | None, raw_answers.get(name)),
+            assumptions=_component_assumptions(correct, component),
         )
-        field_markup = symbolic_input_adapter.markup(
-            name=name,
-            variables=variables,
-            custom_functions=config.custom_functions,
-            label={
-                "lower": "Lower bound",
-                "upper": "Upper bound",
-                "domain": "Index domain",
-                "target": "Approach target",
-                "body": "Operator body",
-            }[component],
-            size=config.body_size if component == "body" else config.limit_size,
-            allow_sets=_requires_set(config, component),
-            allow_complex=config.allow_complex,
-        )
-        symbolic_input_adapter.parse(field_markup, data)
-        raw_value = submitted.get(name)
-        if not isinstance(raw_value, dict):
+        if isinstance(parsed, psu.SympyParseFailure):
+            data.setdefault("format_errors", {})[name] = parsed.error
             continue
-        try:
-            value = cast(
-                sympy.Basic,
-                psu.json_to_sympy(
-                    cast(Any, raw_value),
-                    allow_sets=True,
-                    allow_complex=config.allow_complex,
-                ),
-            )
-            if _requires_set(config, component) and not _is_set_input(value):
-                data.setdefault("format_errors", {})[name] = "This field must be a set."
-                continue
-            result[component] = value
-            data.get("format_errors", {}).pop(name, None)
-        except Exception as exc:  # noqa: BLE001 -- delegated JSON decoding can expose parser errors.
-            data.setdefault("format_errors", {})[name] = str(exc)
+        if parsed.expr == "":
+            raise AssertionError("Component parsing does not allow blank values.")
+        if requires_set and not _is_set_input(parsed.expr):
+            data.setdefault("format_errors", {})[name] = "This field must be a set."
+            continue
+        result[component] = parsed.expr
+        data.get("format_errors", {}).pop(name, None)
     return result if len(result) == len(config.components) else None
 
 
-def parse(element_html: str, data: pl.QuestionData) -> None:
+def parse(element_html: str, data: QuestionData) -> None:
     config = _config(element_html, data)
+    correct = _correct(config, data)
+    correct_index = pbo.json_to_big_operator(correct)["index"]
     submitted = data.setdefault("submitted_answers", {})
+    if submitted:
+        # undo the pollution of submitted_answers by the inner symbolic-inputs
+        for component in config.response_components:
+            component_name = config.component_name(component)
+            submitted.pop(component_name, None)
+            if component != "direction":
+                submitted.pop(f"{component_name}-latex", None)
+
     raw = data.get("raw_submitted_answers", {})
     blank_components: list[ResponseComponent] = [
         component
         for component in config.response_components
-        if not str(raw.get(config.name(component), "")).strip()
+        if not str(raw.get(config.component_name(component), "")).strip()
     ]
     if blank_components and all(
         _component_allows_blank(config, component) for component in blank_components
     ):
-        _parse_values(config, data)
+        _parse_values(config, data, correct)
         if "direction" in blank_components:
-            direction_name = config.name("direction")
-            submitted[direction_name] = ""
-            data.get("format_errors", {}).pop(direction_name, None)
+            data.get("format_errors", {}).pop(config.component_name("direction"), None)
         errors = data.get("format_errors", {})
         has_component_error = any(
-            config.name(component) in errors for component in config.response_components
+            config.component_name(component) in errors
+            for component in config.response_components
         )
-        submitted[config.answer] = None if has_component_error else ""
+        submitted[config.answer_name] = None if has_component_error else ""
         return
-    values = _parse_values(config, data)
-    direction = config.direction
-    if config.limits == "approach" and config.allow_direction_input:
-        direction_name = config.name("direction")
-        direction = str(raw.get(direction_name, "")).strip()
-        if direction not in DIRECTION_SYMBOLS:
+    values = _parse_values(config, data, correct)
+    direction: DirectionName = config.direction
+    if config.indexing == "approaches" and config.allow_direction_input:
+        direction_name = config.component_name("direction")
+        raw_direction = str(raw.get(direction_name, "")).strip()
+        if raw_direction not in DIRECTION_SYMBOLS:
             data.setdefault("format_errors", {})[direction_name] = (
                 "Select a valid limit direction."
             )
-            submitted[direction_name] = None
-            submitted[config.answer] = None
+            submitted[config.answer_name] = None
             return
-        submitted[direction_name] = direction
+        direction = raw_direction  # type: ignore
         data.get("format_errors", {}).pop(direction_name, None)
-    submitted[config.answer] = (
-        _canonical(config, values, direction=direction) if values else None
+    submitted[config.answer_name] = (
+        _canonical_json(config, values, index=correct_index, direction=direction)
+        if values
+        else None
     )
 
 
-def _values(config: Config, structured: dict[str, Any]) -> dict[str, sympy.Basic]:
-    if not all(key in structured for key in config.components):
-        raise ValueError("Operator expression is missing mathematical components.")
-    return {
-        key: cast(
-            sympy.Basic,
-            _decode(
-                structured[key],
-                tuple(dict.fromkeys((*config.variables, config.index)))
-                if key == "body"
-                else config.variables,
-            ),
-        )
-        for key in config.components
-    }
+def _values(
+    config: RenderConfig, structured: BigOperatorJson | object
+) -> ResponseValues:
+    return _get_values(config, pbo.json_to_big_operator(structured))
 
 
 def _construct(
-    config: Config,
-    values: dict[str, sympy.Basic],
+    config: RenderConfig,
+    values: ResponseValues,
     direction: DirectionName | None = None,
+    *,
+    index: sympy.Symbol | None = None,
 ) -> sympy.Basic:
-    index = sympy.Symbol(config.index)
+    index = index if index is not None else sympy.Symbol(config.index)
     body = values["body"]
-    match config.limits, config.operator:
-        case "bounds", "custom":
+    match config.indexing, config.operator:
+        case "bounds", "Custom":
             return sympy.Tuple(body, (index, values["lower"], values["upper"]))
-        case "bounds", operator:
+        case "bounds", "Sum" | "Product" | "Integral" as operator:
             bound_constructor = OP_METADATA[operator].bounds_constructor
             return bound_constructor(body, (index, values["lower"], values["upper"]))
-        case "approach", _:
+        case "bounds", operator:
+            # SymPy does not provide binder forms for these operators. A formal
+            # function preserves the operation while still allowing equivalence
+            # checks to simplify its body and bounds.
+            constructor = cast(
+                Callable[..., sympy.Basic],
+                sympy.Function(f"_pl_{operator}_bounds"),
+            )
+            return constructor(body, index, values["lower"], values["upper"])
+        case "approaches", _:
             return sympy.Limit(
                 body,
                 index,
                 values["target"],
                 dir=DIRECTION_SYMBOLS[direction or config.direction],
             )
-        case "domain", "integral":
+        case "domain", "Integral":
             raise NotImplementedError(
                 "Equivalent grading for domain integrals is unsupported; use exact or component grading."
             )
@@ -1373,22 +1410,42 @@ def _construct(
                 body.subs(index, item)
                 for item in domain  # type: ignore
             ]
-            if operator == "custom":
+            if operator == "Custom":
                 return sympy.Tuple(*terms)
             return OP_METADATA[operator].domain_constructor(*terms)
 
 
+def _validate_equivalent_configuration(
+    config: RenderConfig, correct: BigOperatorJson
+) -> None:
+    if config.grading != "equivalent":
+        return
+    try:
+        _construct(
+            config,
+            _values(config, correct),
+            correct.get("direction"),
+            index=pbo.json_to_big_operator(correct)["index"],
+        )
+    except NotImplementedError as exc:
+        raise ValueError(
+            f"A SymPy baseline for equivalence-checking could not be constructed for your answer:\n{exc}"
+        ) from exc
+
+
 def _equivalent(
-    config: Config,
-    left_values: dict[str, sympy.Basic],
-    right_values: dict[str, sympy.Basic],
+    config: RenderConfig,
+    left_values: ResponseValues,
+    right_values: ResponseValues,
     left_direction: DirectionName | None = None,
     right_direction: DirectionName | None = None,
+    *,
+    index: sympy.Symbol | None = None,
 ) -> bool:
     try:
         left, right = (
-            _construct(config, left_values, left_direction),
-            _construct(config, right_values, right_direction),
+            _construct(config, left_values, left_direction, index=index),
+            _construct(config, right_values, right_direction, index=index),
         )
         return _expressions_equivalent(left, right)
     except (NotImplementedError, TypeError, ValueError, ZeroDivisionError):
@@ -1399,61 +1456,70 @@ def _expressions_equivalent(left: sympy.Basic, right: sympy.Basic) -> bool:
     try:
         if left == right:
             return True
-        left, right = left.doit(), right.doit()
+
+        if isinstance(left, sympy.Set) or isinstance(right, sympy.Set):
+            return False
+
+        difference = sympy.simplify(sympy.expand(left - right))  # type: ignore
+        if difference == 0 or difference.equals(0) is True:
+            return True
+
+        left = left.doit()
         if left == right:
             return True
-        difference = sympy.simplify(sympy.expand(cast(Any, left) - cast(Any, right)))
+        right = right.doit()
+        if left == right:
+            return True
+
+        difference = sympy.simplify(sympy.expand(left - right))  # type: ignore
         return difference == 0 or difference.equals(0) is True
     except (TypeError, ValueError, ZeroDivisionError):
         return False
 
 
-def grade(element_html: str, data: pl.QuestionData) -> None:
+def grade(element_html: str, data: QuestionData) -> None:
     config = _config(element_html, data)
-    correct_json = _correct(config, data)
-    if correct_json is None:
+    grading = config.grading
+    if grading == "none":
         return
-    if data.get("submitted_answers", {}).get(config.answer) == "":
-        score = 0.0
-    else:
-        submitted_json = data.get("submitted_answers", {}).get(config.answer)
-        if not isinstance(submitted_json, dict):
-            data.setdefault("partial_scores", {})[config.answer] = {
-                "score": 0.0,
-                "weight": config.weight,
-            }
-            pl.set_weighted_score_data(data)
-            return
+    correct_json = _correct(config, data)
+
+    def grade_function(submitted_json: object) -> tuple[float, None]:
+        if submitted_json == "" or not isinstance(submitted_json, dict):
+            return 0.0, None
         try:
             submitted, correct = (
                 _values(config, submitted_json),
                 _values(config, correct_json),
             )
         except (KeyError, TypeError, ValueError):
-            data.setdefault("partial_scores", {})[config.answer] = {
-                "score": 0.0,
-                "weight": config.weight,
-            }
-            pl.set_weighted_score_data(data)
-            return
-        match config.grading:
+            return 0.0, None
+        match grading:
             case "exact":
-                score = float(submitted_json == correct_json)
-            case "component":
-                weights = [
-                    config.body_weight if c == "body" else 1 for c in config.components
-                ]
-                earned = sum(
-                    w
-                    for c, w in zip(config.components, weights)
-                    if _expressions_equivalent(submitted[c], correct[c])
+                score = float(
+                    all(submitted[c] == correct[c] for c in config.components)
+                    and (
+                        config.indexing != "approaches"
+                        or not config.allow_direction_input
+                        or submitted_json.get("direction")
+                        == correct_json.get("direction")
+                    )
                 )
-                if config.limits == "approach" and config.allow_direction_input:
-                    weights.append(1)
+            case "component":
+                earned = sum(
+                    config.body_weight if component == "body" else 1
+                    for component in config.components
+                    if _expressions_equivalent(submitted[component], correct[component])
+                )
+                possible = len(config.components) + (
+                    (config.body_weight - 1) if "body" in config.components else 0
+                )
+                if config.allow_direction_input:
                     earned += int(
                         submitted_json.get("direction") == correct_json.get("direction")
                     )
-                score = earned / sum(weights)
+                    possible += 1
+                score = earned / possible
             case "equivalent":
                 score = float(
                     _equivalent(
@@ -1462,30 +1528,64 @@ def grade(element_html: str, data: pl.QuestionData) -> None:
                         correct,
                         submitted_json.get("direction"),
                         correct_json.get("direction"),
+                        index=pbo.json_to_big_operator(correct_json)["index"],
                     )
                 )
-    data.setdefault("partial_scores", {})[config.answer] = {
-        "score": score,
-        "weight": config.weight,
-    }
+        return score, None
+
+    pl.grade_answer_parameterized(
+        data,
+        config.answer_name,
+        grade_function,
+        weight=config.weight,
+        timeout=SYMPY_TIMEOUT,
+        timeout_format_error=SYMPY_TIMEOUT_FORMAT_ERROR,
+    )
     pl.set_weighted_score_data(data)
 
 
 def test(element_html: str, data: pl.ElementTestData) -> None:
-    if data["test_type"] != "correct":
-        return
     config = _config(element_html, data)
-    correct = _correct(config, data)
-    if correct is None:
-        return
-    values = _values(config, correct)
-    raw = data.setdefault("raw_submitted_answers", {})
-    for component, value in values.items():
-        raw[config.name(component)] = str(value)
-    if config.limits == "approach" and config.allow_direction_input:
-        raw[config.name("direction")] = correct.get("direction", config.direction)
-    data.setdefault("partial_scores", {})[config.answer] = {
-        "score": 1,
-        "weight": config.weight,
-    }
-    pl.set_weighted_score_data(data)
+    correct_json = _correct(config, data)
+
+    correct = _values(config, correct_json)
+    match data["test_type"]:
+        case "correct":
+            for component, value in correct.items():
+                data["raw_submitted_answers"][config.component_name(component)] = str(
+                    psi.replace_imaginary_for_display(
+                        cast(sympy.Expr, value), config.imaginary_unit
+                    )
+                )
+            if config.indexing == "approaches" and config.allow_direction_input:
+                data["raw_submitted_answers"][config.component_name("direction")] = (
+                    correct_json.get("direction", None)
+                )
+            if config.grading != "none":
+                data["partial_scores"][config.answer_name] = {
+                    "score": 1,
+                    "weight": config.weight,
+                }
+        case "incorrect":
+            for component, value in correct.items():
+                raw_value = (
+                    r"{999999}"
+                    if _requires_set(config, component)
+                    else f"({value}) + 1"
+                )
+                data["raw_submitted_answers"][config.component_name(component)] = (
+                    raw_value
+                )
+            if config.indexing == "approaches" and config.allow_direction_input:
+                data["raw_submitted_answers"][config.component_name("direction")] = (
+                    correct_json.get("direction", None)
+                )
+            if config.grading != "none":
+                data["partial_scores"][config.answer_name] = {
+                    "score": 0,
+                    "weight": config.weight,
+                }
+        case "invalid":
+            name = config.component_name(next(iter(config.components)))
+            data["raw_submitted_answers"][name] = "INVALID"
+            data["format_errors"][name] = "Invalid test input"
