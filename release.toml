@@ -7,6 +7,10 @@ history_source = "elements/pl-big-operator-input"
 source = "elements/pl-big-operator-input"
 destination = "."
 
+[[include]]
+source = ".agents"
+destination = ".agents"
+
 # File destinations include the final filename.
 [[include]]
 source = ".gitignore"
