@@ -1,0 +1,17 @@
+# Repository-relative globs that do not affect question behavior.
+.agents
+.github
+.githooks
+*.*ignore
+.htmlmustache.jsonc
+.prettierrc.json
+.vscode
+LICENSE
+README.md
+courseInstances
+infoCourse.json
+scripts
+Makefile
+package.json
+pnpm*.yaml
+*lock.yaml

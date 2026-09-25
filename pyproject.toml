@@ -11,10 +11,20 @@ dependencies = ["prairielearn", "chevron", "lxml"]
 [dependency-groups]
 dev = [
     "ipython",
+    "jsonschema",
     "pl-vendor>=0.4.2",
     "pyright",
     "pytest",
     "ruff",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["e2e-tests"]
+markers = [
+    "generate: question generate-phase lifecycle checks",
+    "prepare: question prepare-phase lifecycle checks",
+    "render: question render-phase lifecycle checks",
+    "grade: question grading lifecycle checks",
 ]
 
 [tool.uv.sources.prairielearn]
@@ -22,9 +32,17 @@ git = "https://github.com/PrairieLearn/PrairieLearn.git"
 rev = "0327fea1b86cadd968f215ebcf6506ee8fff0d65" # PrairieLearn master snapshot; unmerged helpers are vendored below
 subdirectory = "apps/prairielearn/python"
 
+[tool.setuptools.packages.find]
+where = ["e2e-tests", "src"]
+include = ["pl_big_operator_input", "prairielearn_e2e"]
+
+[tool.setuptools.package-data]
+prairielearn_e2e = ["config.json"]
+
 [tool.pyright]
-include = ["elements", "questions", "scripts", "src"]
+include = ["e2e-tests", "elements", "questions", "scripts", "src"]
 exclude = ["**/vendor", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
+extraPaths = [".", "e2e-tests"]
 
 [tool.ruff]
 exclude = ["**/vendor", "scripts/prompts/output"]

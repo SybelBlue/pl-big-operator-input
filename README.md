@@ -29,6 +29,8 @@ Install the following tools before getting started:
 Clone the repository, enter its directory, and install the project dependencies:
 
 ```sh
+export PRAIRIELEARN_PATH=/path/to/PrairieLearn
+make install-prairielearn # omit this if the clone already exists
 make deps
 ```
 
@@ -74,9 +76,11 @@ Start customizing the template by updating `infoCourse.json`, the starter course
 | Command | Description |
 | --- | --- |
 | `make deps` | Fetch PrairieLearn schemas and install Python and Node dependencies |
+| `make install-prairielearn` | Clone PrairieLearn into `PRAIRIELEARN_PATH` |
 | `make test` | Run helper, element, and question tests |
 | `make test-helpers` | Run tests for shared helpers and custom elements |
 | `make test-content` | Run question tests |
+| `make test-e2e-fuzz` | Fuzz questions affected by the current Git diff |
 | `make typecheck` | Type-check Python code with Pyright |
 | `make format` | Format Python, JSON, HTML, and Mustache files |
 | `make ci-dryrun` | Run tests, type checking, formatting checks, schema checks, and vendor verification |
@@ -91,6 +95,31 @@ Pass additional options to pytest with `PYTEST_ARGS`. For example:
 
 ```sh
 make test PYTEST_ARGS="-x -vv"
+```
+
+The question tests run the real Python element lifecycle from the PrairieLearn
+revision pinned in `uv.lock`. Set `PRAIRIELEARN_PATH` to a PrairieLearn Git clone
+that contains that revision. `make test` checks every question with three generated
+variant seeds; on pull requests, CI also checks diff-selected questions with ten
+additional fuzz seeds. Useful focused commands include:
+
+```sh
+make test-e2e QUESTION_PATHS=questions/s.4
+make test-e2e E2E_SEED_COUNT=10
+make test-e2e-fuzz E2E_FUZZ_SEED=12345
+make test-e2e-fuzz-diff-only E2E_DIFF_BASE=origin/main
+```
+
+The diff-only runner tests changed question directories. A non-ignored change
+outside `questions/` tests every question; `.question-e2e.diffignore` lists files
+that cannot affect question behavior. Every fuzz run reports a master seed and a
+replay command. To retain a failing concrete variant seed as a permanent regression
+case, run:
+
+```sh
+make add-e2e-regression-seed \
+  QUESTION_PATH=questions/s.4 \
+  VARIANT_SEED=123456789
 ```
 
 ### Typical development workflow

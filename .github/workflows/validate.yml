@@ -47,8 +47,25 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Materialize pinned PrairieLearn clone
+        run: |
+          pl_commit=$(uv run --active python -c 'import json; from importlib.metadata import distribution; print(json.loads(distribution("prairielearn").read_text("direct_url.json"))["vcs_info"]["commit_id"])')
+          pl_checkout=$(mktemp -d "$RUNNER_TEMP/prairielearn.XXXXXX")
+          git -C "$pl_checkout" init --quiet --initial-branch=main
+          git -C "$pl_checkout" remote add origin https://github.com/PrairieLearn/PrairieLearn.git
+          git -C "$pl_checkout" fetch --depth=1 origin "$pl_commit"
+          git -C "$pl_checkout" checkout --detach FETCH_HEAD
+          echo "PRAIRIELEARN_PATH=$pl_checkout" >> "$GITHUB_ENV"
+
       - name: Test
         run: make test
+
+      - name: Run e2e fuzz tests
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: make test-e2e-fuzz
 
   vendor:
     runs-on: ubuntu-latest
