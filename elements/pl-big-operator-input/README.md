@@ -4,7 +4,7 @@ Displays a sum, integral, limit, or other indexed operator. Students enter the i
 
 The fields accept the same symbolic syntax as PrairieLearn's `pl-symbolic-input`.
 
-This checkout tracks PrairieLearn's in-development implementation at commit `0952fbfcde4fee9d8a007e87deaeb49970598c05`. The element uses Python APIs introduced on that branch, so run it with that PrairieLearn commit or a descendant that contains those APIs.
+This checkout tracks PrairieLearn's in-development implementation at commit `0952fbfcde4fee9d8a007e87deaeb49970598c05`. Its unmerged Python helpers and `pl-symbolic-input` are pinned with `pl-vendor`, so the course element can run on PrairieLearn `master` without those modules being installed in PrairieLearn itself.
 
 ## Sample element
 
@@ -207,23 +207,25 @@ def generate(data):
     data["correct_answers"]["total"] = pl.to_json(answer)
 ```
 
-Use `pbo.big_operator_to_json()` when you want to provide the operator, indexing, and mathematical values separately. Mathematical fields accept SymPy values, strings, Python integers, and Python sets. This is particularly useful for custom operators:
+To provide a custom operator from Python, build its structured answer with SymPy JSON leaves. This representation is useful until the big-operator helper API is available in PrairieLearn itself:
 
 ```python title="server.py"
-import prairielearn.big_operator_utils as pbo
+import prairielearn as pl
 import sympy
 
 
 def generate(data):
     x = sympy.Symbol("x")
-    data["correct_answers"]["evaluation"] = pbo.big_operator_to_json(
-        operator="Custom",
-        indexing="approaches",
-        index=x,
-        target=0,
-        direction="two-sided",
-        body=sympy.Function("f")(x),
-    )
+    data["correct_answers"]["evaluation"] = {
+        "_type": "big_operator",
+        "_version": 1,
+        "operator": "Custom",
+        "indexing": "approaches",
+        "index": pl.to_json(x),
+        "target": pl.to_json(sympy.Integer(0)),
+        "direction": "two-sided",
+        "body": pl.to_json(sympy.Function("f")(x)),
+    }
 ```
 
 ```html title="question.html"
@@ -237,7 +239,7 @@ def generate(data):
 
 ### Custom grading in `server.py`
 
-Most questions should use one of the built-in grading methods. For custom grading, use `pbo.json_to_big_operator()` or `pl.from_json()` to validate the combined answer and convert its mathematical fields to SymPy values. Check `indexing` before accessing fields that are specific to bounds, domains, or limits.
+Most questions should use one of the built-in grading methods. For custom grading on PrairieLearn `master`, inspect the structured answer and use `pl.from_json()` on each mathematical field. Check `indexing` before accessing fields that are specific to bounds, domains, or limits.
 
 ```python title="server.py"
 import prairielearn as pl
@@ -245,12 +247,15 @@ import prairielearn as pl
 
 def grade(data):
     submitted_json = data["submitted_answers"].get("total")
-    submitted = pl.from_json(submitted_json)
-    correct = pl.from_json(data["correct_answers"]["total"])
+    correct_json = data["correct_answers"]["total"]
 
-    if submitted["indexing"] == "bounds" and correct["indexing"] == "bounds":
-        submitted_body = submitted["body"]
-        correct_body = correct["body"]
+    if (
+        isinstance(submitted_json, dict)
+        and submitted_json.get("indexing") == "bounds"
+        and correct_json.get("indexing") == "bounds"
+    ):
+        submitted_body = pl.from_json(submitted_json["body"])
+        correct_body = pl.from_json(correct_json["body"])
         # Apply custom grading logic to the decoded SymPy values.
 ```
 

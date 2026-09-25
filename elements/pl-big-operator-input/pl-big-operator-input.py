@@ -13,22 +13,27 @@ from typing import TYPE_CHECKING, Any, Final, Literal, cast
 import chevron
 import lxml.html
 import prairielearn as pl
-import prairielearn.big_operator_utils as pbo
-import prairielearn.internal.symbolic_input as psi
-import prairielearn.sympy_utils as psu
 import sympy
 import sympy.sets
-from prairielearn.big_operator_utils import BigOperatorName as OperatorName
-from prairielearn.internal.symbolic_input import DisplayType
 from prairielearn.timeout_utils import SignalTimeout, TimeoutState
+from vendor.pl_big_operator_python import big_operator_utils as pbo
+from vendor.pl_big_operator_python import sympy_utils as psu
+from vendor.pl_big_operator_python.big_operator_utils import (
+    BigOperatorName as OperatorName,
+)
+from vendor.pl_big_operator_python.internal import symbolic_input as psi
+from vendor.pl_big_operator_python.internal.symbolic_input import DisplayType
 
 if TYPE_CHECKING:
-    from prairielearn.big_operator_utils import BigOperator, BigOperatorJson
-    from prairielearn.big_operator_utils import BigOperatorDirection as DirectionName
-    from prairielearn.big_operator_utils import BigOperatorIndexing as Indexing
-    from prairielearn.big_operator_utils import BigOperatorSympyName as SympyOperator
     from prairielearn.question_utils import QuestionData
-    from prairielearn.sympy_utils import (
+    from vendor.pl_big_operator_python.big_operator_utils import (
+        BigOperator,
+        BigOperatorDirection as DirectionName,
+        BigOperatorIndexing as Indexing,
+        BigOperatorJson,
+        BigOperatorSympyName as SympyOperator,
+    )
+    from vendor.pl_big_operator_python.sympy_utils import (
         AllowedSympyType,
         SympyJson,
     )
