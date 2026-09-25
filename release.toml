@@ -1,0 +1,13 @@
+version = 1
+history_source = "elements/pl-big-operator-input"
+
+# Directory sources are copied recursively. A destination of "." places their
+# contents at the root of the release branch.
+[[include]]
+source = "elements/pl-big-operator-input"
+destination = "."
+
+# File destinations include the final filename.
+[[include]]
+source = ".gitignore"
+destination = ".gitignore"

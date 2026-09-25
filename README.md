@@ -128,3 +128,13 @@ make add-e2e-regression-seed \
 2. Reference them from an assessment in `courseInstances/`.
 3. Preview the course with `make dev`.
 4. Run `make format` and `make ci-dryrun` before committing.
+
+### Release contents
+
+Pushing to `main` rebuilds the `release` branch from
+the sources mapped in `release.toml`. `history_source` selects the directory
+whose Git history anchors the release branch. Each `[[include]]` entry has a
+`source` path relative to the repository root and a `destination` path relative
+to the release root. Directories are copied recursively; file destinations
+include the final filename. Use `destination = "."` to place a source
+directory's contents at the release root.
