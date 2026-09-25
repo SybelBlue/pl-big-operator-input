@@ -1,0 +1,7 @@
+{
+  "element_solution_answer_selectors": ["pl-sketch"],
+  "non_gradable_answer_selectors": [
+    "pl-sketch[read-only=\"true\"]",
+    "pl-sketch[read-only=\"1\"]"
+  ]
+}
