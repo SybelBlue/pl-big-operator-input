@@ -8,10 +8,10 @@ from typing import Any, Literal, cast, get_args
 
 import lxml.html
 import prairielearn as pl
-import prairielearn.big_operator_utils as pbo
-import prairielearn.sympy_utils as psu
 import pytest
 import sympy
+from vendor.pl_big_operator_python import big_operator_utils as pbo
+from vendor.pl_big_operator_python import sympy_utils as psu
 
 big_operator_input = importlib.import_module("pl-big-operator-input")
 
@@ -72,6 +72,16 @@ def prepare_parse_grade(markup: str, data: dict[str, Any]) -> None:
 
 
 class TestConfigurationUnits:
+    def test_unmerged_support_modules_are_vendored(self) -> None:
+        assert pbo.__name__ == "vendor.pl_big_operator_python.big_operator_utils"
+        assert (
+            big_operator_input.psi.__name__
+            == "vendor.pl_big_operator_python.internal.symbolic_input"
+        )
+        assert big_operator_input.psu is psu
+        assert pbo.psu is psu
+        assert big_operator_input.psi.psu is psu
+
     def test_sympy_operator_metadata_is_complete(self) -> None:
         assert set(big_operator_input.OP_METADATA) == set(
             get_args(pbo.BigOperatorSympyName.__value__)
@@ -2206,14 +2216,16 @@ class TestDocSmoke:
     def test_custom_python_correct_answer(self) -> None:
         data = question_data()
         x = sympy.Symbol("x")
-        data["correct_answers"]["evaluation"] = pbo.big_operator_to_json(
-            operator="Custom",
-            indexing="approaches",
-            index=x,
-            target=0,
-            direction="two-sided",
-            body=sympy.Function("f")(x),
-        )
+        data["correct_answers"]["evaluation"] = {
+            "_type": "big_operator",
+            "_version": 1,
+            "operator": "Custom",
+            "indexing": "approaches",
+            "index": pl.to_json(x),
+            "target": pl.to_json(sympy.Integer(0)),
+            "direction": "two-sided",
+            "body": pl.to_json(sympy.Function("f")(x)),
+        }
         markup = html(
             **{
                 "answers-name": "evaluation",
@@ -2250,9 +2262,9 @@ class TestDocSmoke:
         data["correct_answers"]["total"] = correct_answer
 
         prepared = self._prepare_parse_render(markup, data)
-        submitted = pl.from_json(prepared["submitted_answers"]["total"])
-        correct = pl.from_json(prepared["correct_answers"]["total"])
+        submitted = prepared["submitted_answers"]["total"]
+        correct = prepared["correct_answers"]["total"]
 
         assert submitted["indexing"] == "bounds"
         assert correct["indexing"] == "bounds"
-        assert submitted["body"] == correct["body"]
+        assert pl.from_json(submitted["body"]) == pl.from_json(correct["body"])
