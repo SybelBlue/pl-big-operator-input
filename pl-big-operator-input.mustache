@@ -8,6 +8,11 @@
     >
       {{> question-content }}
     </span>
+    {{#display_feedback}}
+      <span class="alert alert-info d-inline-block mt-2 mb-0 pl-big-operator-input-feedback" role="status">
+        {{{ feedback }}}
+      </span>
+    {{/display_feedback}}
   {{/inline}}
   {{#block}}
     <div
@@ -18,6 +23,11 @@
     >
       {{> question-content }}
     </div>
+    {{#display_feedback}}
+      <div class="alert alert-info mt-2 mb-0 pl-big-operator-input-feedback" role="status">
+        {{{ feedback }}}
+      </div>
+    {{/display_feedback}}
   {{/block}}
 {{/question}}
 {{#submission}}

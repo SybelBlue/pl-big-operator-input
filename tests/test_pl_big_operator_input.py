@@ -1754,6 +1754,31 @@ class TestRenderUnits:
         assert rendered.count("fa-check") == 2
         assert rendered.count("fa-times") == 1
 
+    def test_question_panel_renders_aggregate_feedback_as_info_alert(self) -> None:
+        markup = html(
+            **{
+                "correct-answer": "Integral(k**2, (k, 1, 4))",
+                "grading-method": "component",
+            }
+        )
+        data = question_data(
+            raw_submitted_answers={
+                "op-lower": "1",
+                "op-upper": "5",
+                "op-body": "k^2",
+            }
+        )
+        prepare_parse_grade(markup, data)
+        feedback = "Correct component(s): lower bound, integrand."
+        data["partial_scores"]["op"]["feedback"] = feedback
+
+        rendered = big_operator_input.render(markup, data)
+
+        assert "pl-big-operator-input-feedback" in rendered
+        assert "alert alert-info" in rendered
+        assert 'role="status"' in rendered
+        assert feedback in rendered
+
     @pytest.mark.parametrize(
         ("panel", "direction_tex"),
         [("question", r"{}^+"), ("submission", r"0^+")],
