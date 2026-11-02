@@ -1017,6 +1017,10 @@ def _question_mustache(config: RenderConfig, data: QuestionData) -> str:
     partial_score = data.get("partial_scores", {}).get(config.answer_name)
     if partial_score is not None:
         context["score_badge"] = _score_badge(float(partial_score.get("score") or 0))
+        feedback = partial_score.get("feedback")
+        if isinstance(feedback, str) and feedback:
+            context["display_feedback"] = True
+            context["feedback"] = feedback
     match config.indexing:
         case "bounds":
             context["lower_field"] = _symbolic_field(
@@ -1213,6 +1217,10 @@ def render(element_html: str, data: QuestionData) -> str:
             partial_score = data.get("partial_scores", {}).get(config.answer_name)
             if partial_score is not None:
                 context.update(_score_badge(float(partial_score.get("score") or 0)))
+                feedback = partial_score.get("feedback")
+                if isinstance(feedback, str) and feedback:
+                    context["display_feedback"] = True
+                    context["feedback"] = feedback
             return _render_mustache(context, mode="submission")
 
 
