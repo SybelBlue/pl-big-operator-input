@@ -15,6 +15,11 @@
       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
       "description": "Unique identifier (UUID)."
     },
+    "copiedFrom": {
+      "type": "string",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(\\/.*)?$",
+      "description": "The course UUID and question UUID of the source question, separated by a slash, optionally followed by a slash and human-readable text. Only the two UUIDs identify the source."
+    },
     "type": {
       "type": "string",
       "enum": ["Calculation", "MultipleChoice", "Checkbox", "File", "MultipleTrueFalse", "v3"],
@@ -39,34 +44,43 @@
     },
     "authors": {
       "default": [],
-      "maxItems": 10,
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "name": {
+        "anyOf": [
+          {
             "type": "string",
-            "minLength": 3,
-            "maxLength": 255,
-            "description": "A human-readable name of a question author."
+            "minLength": 1,
+            "description": "A user UID, which need not identify an existing account or be a routable email."
           },
-          "email": {
-            "type": "string",
-            "maxLength": 255,
-            "description": "An email address to contact a question author."
-          },
-          "orcid": {
-            "type": "string",
-            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$",
-            "description": "An ORCID identifier that uniquely identifies an individual question author."
-          },
-          "originCourse": {
-            "type": "string",
-            "description": "The sharing name of a course whose staff is a question author."
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 255,
+                "description": "A human-readable name of a question author."
+              },
+              "email": {
+                "type": "string",
+                "maxLength": 255,
+                "description": "An email address to contact a question author."
+              },
+              "orcid": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$",
+                "description": "An ORCID identifier that uniquely identifies an individual question author."
+              },
+              "originCourse": {
+                "type": "string",
+                "description": "The sharing name of a course whose staff is a question author."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Deprecated structured author metadata. Replace with a UID string; legacy email values are treated as UIDs during the transition.",
+            "deprecated": true
           }
-        },
-        "additionalProperties": false,
-        "description": "An author (individual person, or staff of a course of origin) credited with creating a question."
+        ]
       }
     },
     "clientFiles": {
@@ -138,7 +152,7 @@
         },
         "image": {
           "type": "string",
-          "description": "The Docker image that will be used to grade this question. Should be specified as Dockerhub image."
+          "description": "The public Docker image that will be used to grade this question. Use a public image from Docker Hub (docker.io), GHCR (ghcr.io), Quay (quay.io), GitLab (registry.gitlab.com), or Amazon ECR Public (public.ecr.aws). For example, docker.io/org/image:tag for Docker Hub or ghcr.io/org/image:tag for GHCR. Custom registry domains and explicit ports are not supported."
         },
         "entrypoint": {
           "anyOf": [
@@ -283,7 +297,7 @@
         },
         "image": {
           "type": "string",
-          "description": "The Docker image that will be used to serve this question. Should be specified as Dockerhub image."
+          "description": "The public Docker image that will be used to serve this question. Use a public image from Docker Hub (docker.io), GHCR (ghcr.io), Quay (quay.io), GitLab (registry.gitlab.com), or Amazon ECR Public (public.ecr.aws). For example, docker.io/org/image:tag for Docker Hub or ghcr.io/org/image:tag for GHCR. Custom registry domains and explicit ports are not supported."
         },
         "port": {
           "description": "The port number used in the Docker image. If not specified, the port is retrieved from the workspace image labels.",
@@ -334,14 +348,7 @@
             "type": "string"
           },
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": ["string", "null"]
           },
           "description": "Environment variables to set inside the workspace container. Use a null value to unset a variable."
         },
@@ -391,29 +398,12 @@
             "enum": ["string", "number", "boolean"]
           },
           "default": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
+            "type": ["string", "number", "boolean"]
           },
           "enum": {
             "type": "array",
             "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                }
-              ]
+              "type": ["string", "number"]
             }
           }
         },

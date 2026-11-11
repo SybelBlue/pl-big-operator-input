@@ -63,7 +63,7 @@ For randomized questions, construct the same complete string in `server.py` inst
 data["correct_answers"]["total"] = f"Sum(k**2, (k, 1, {upper}))"
 ```
 
-SymPy `Sum`, `Product`, `Integral`, and `Limit` answers may instead be stored with `pl.to_json(...)`. Never put a raw SymPy object in question data. Use a current `_type: big_operator` dictionary for other programmatically constructed operators.
+SymPy `Sum`, `Product`, `Integral`, and `Limit` answers may instead be stored with `pl_big_operator_python.big_operator_utils.sympy_to_big_operator_json(...)` after installing the helper from the element release's stable `vendor/pl_big_operator_python` subdirectory. Never put a raw SymPy object in question data or pass a big operator to `pl.to_json(...)`; PrairieLearn rejects the binder tuples inside these values. Use `big_operator_to_json(...)` for other programmatically constructed operators.
 
 Existing complete `Func(body, (index, ...))` answers usually remain valid. Normalize legacy `Limit(body, index, target, dir=...)` strings to the tuple form above. When explicit legacy attributes disagree with the complete answer, stop and report the inconsistency rather than choosing one silently.
 
