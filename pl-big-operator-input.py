@@ -28,9 +28,15 @@ if TYPE_CHECKING:
     from prairielearn.question_utils import QuestionData
     from vendor.pl_big_operator_python.big_operator_utils import (
         BigOperator,
-        BigOperatorDirection as DirectionName,
-        BigOperatorIndexing as Indexing,
         BigOperatorJson,
+    )
+    from vendor.pl_big_operator_python.big_operator_utils import (
+        BigOperatorDirection as DirectionName,
+    )
+    from vendor.pl_big_operator_python.big_operator_utils import (
+        BigOperatorIndexing as Indexing,
+    )
+    from vendor.pl_big_operator_python.big_operator_utils import (
         BigOperatorSympyName as SympyOperator,
     )
     from vendor.pl_big_operator_python.sympy_utils import (
@@ -631,16 +637,8 @@ def _sympy_to_big_operator_json(
         case "Limit":
             if not isinstance(value, sympy.Limit):
                 return None
-            if len(value.args) != 4:
-                raise ValueError("Correct answer Limit has an invalid structure.")
-            body, index, target, _ = value.args
-            if not isinstance(index, sympy.Symbol):
+            if len(value.args) > 1 and not isinstance(value.args[1], sympy.Symbol):
                 raise TypeError("Correct answer index must be a symbol.")
-            return _canonical_json(
-                config,
-                {"target": target, "body": body},
-                index=index,
-            )
 
         case "Sum":
             if not isinstance(value, sympy.Sum):
@@ -654,40 +652,25 @@ def _sympy_to_big_operator_json(
         case _:
             return None
 
-    if len(value.args) != 2 or not isinstance(value.args[1], sympy.Tuple):
-        raise ValueError("Correct answer must have exactly one indexing tuple.")
-    indexing_values = value.args[1].args
-    expected_length = 3 if config.indexing == "bounds" else 2
-    if len(indexing_values) != expected_length:
+    if not isinstance(value, sympy.Limit):
+        if len(value.limits) != 1:
+            raise ValueError("Correct answer must have exactly one indexing tuple.")
+        binder = cast(tuple[sympy.Basic, ...], value.limits[0])
+        if not isinstance(binder[0], sympy.Symbol):
+            raise TypeError("Correct answer index must be a symbol.")
+
+    encoded = pbo.sympy_to_big_operator_json(cast(Any, value))
+    if encoded["indexing"] != config.indexing:
+        if config.indexing == "approaches":
+            raise ValueError(
+                f"Correct answer operator does not support indexing={config.indexing!r}."
+            )
+        expected_length = 3 if config.indexing == "bounds" else 2
         raise ValueError(
             f'Correct answer for indexing="{config.indexing}" must have exactly one '
             f"{expected_length}-item indexing tuple."
         )
-    body = value.args[0]
-    index = indexing_values[0]
-    if not isinstance(index, sympy.Symbol):
-        raise TypeError("Correct answer index must be a symbol.")
-    match config.indexing:
-        case "bounds":
-            return _canonical_json(
-                config,
-                {
-                    "lower": indexing_values[1],
-                    "upper": indexing_values[2],
-                    "body": body,
-                },
-                index=index,
-            )
-        case "domain":
-            return _canonical_json(
-                config,
-                {"domain": indexing_values[1], "body": body},
-                index=index,
-            )
-        case "approaches":
-            raise ValueError(
-                f"Correct answer operator does not support indexing={config.indexing!r}."
-            )
+    return encoded
 
 
 def _answer_json(

@@ -194,38 +194,46 @@ def generate(data):
     data["correct_answers"]["total"] = f"Product(k + 1, (k, 1, {upper}))"
 ```
 
-You can also build a `Sum`, `Product`, `Integral`, or `Limit` with SymPy and convert it to JSON:
+You can also build a one-binder `Sum`, `Product`, `Integral`, or `Limit` with SymPy and convert it to tuple-free structured JSON. Install the serializer as a separate vendored dependency so question code does not import from the element's private directory:
+
+```toml title="pyproject.toml"
+[tool.pl-vendor.packages.pl-big-operator-python]
+path = "serverFilesCourse/pl_big_operator_python"
+url = "https://github.com/SybelBlue/pl-big-operator-input.git"
+branch = "release"
+subdirectory = "vendor/pl_big_operator_python"
+```
+
+The `vendor/pl_big_operator_python` release subdirectory is a stable source for this helper package.
 
 ```python title="server.py"
-import prairielearn as pl
 import sympy
+from pl_big_operator_python import big_operator_utils as pbo
 
 
 def generate(data):
     k = sympy.Symbol("k")
     answer = sympy.Product(k + 1, (k, 1, 4))
-    data["correct_answers"]["total"] = pl.to_json(answer)
+    data["correct_answers"]["total"] = pbo.sympy_to_big_operator_json(answer)
 ```
 
-To provide a custom operator from Python, build its structured answer with SymPy JSON leaves. This representation is useful until the big-operator helper API is available in PrairieLearn itself:
+Indefinite integrals, multiple binders, and nested big operators are not representable by the version 1 structured format. Build custom operators with the labelled helper API:
 
 ```python title="server.py"
-import prairielearn as pl
 import sympy
+from pl_big_operator_python import big_operator_utils as pbo
 
 
 def generate(data):
     x = sympy.Symbol("x")
-    data["correct_answers"]["evaluation"] = {
-        "_type": "big_operator",
-        "_version": 1,
-        "operator": "Custom",
-        "indexing": "approaches",
-        "index": pl.to_json(x),
-        "target": pl.to_json(sympy.Integer(0)),
-        "direction": "two-sided",
-        "body": pl.to_json(sympy.Function("f")(x)),
-    }
+    data["correct_answers"]["evaluation"] = pbo.big_operator_to_json(
+        operator="Custom",
+        indexing="approaches",
+        index=x,
+        target=0,
+        direction="two-sided",
+        body=sympy.Function("f")(x),
+    )
 ```
 
 ```html title="question.html"
