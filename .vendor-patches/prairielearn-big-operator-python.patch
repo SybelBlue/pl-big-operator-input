@@ -707,7 +707,7 @@ index e445618..ae29805 100644
 -# from prairielearn.colors import *
 +"""Vendored support modules for pl-big-operator-input."""
 diff --git a/big_operator_utils.py b/big_operator_utils.py
-index 0e4e8b4..940a7a7 100644
+index 0e4e8b4..5a41c5c 100644
 --- a/big_operator_utils.py
 +++ b/big_operator_utils.py
 @@ -10,7 +10,7 @@ from typing import Any, Literal, TypedDict, TypeGuard, cast, overload
@@ -741,29 +741,33 @@ index 0e4e8b4..940a7a7 100644
 
 
  def is_big_operator_json(value: Any) -> TypeGuard[BigOperatorJson]:
-@@ -205,6 +213,10 @@ def _decode_sympy_field(value: Any, field: str) -> sympy.Basic:
+@@ -205,6 +213,12 @@ def _decode_sympy_field(value: Any, field: str) -> sympy.Basic:
          ) from exc
      if not isinstance(decoded, sympy.Basic):
          raise TypeError(f'Big-operator field "{field}" must decode to a SymPy value.')
-+    if decoded.has(sympy.Tuple):
++    if decoded.has(sympy.Tuple) or decoded.has(
++        sympy.Sum, sympy.Product, sympy.Integral, sympy.Limit
++    ):
 +        raise ValueError(
 +            f'Big-operator field "{field}" cannot contain SymPy Tuple values or nested big operators.'
 +        )
      return decoded
 
 
-@@ -233,6 +245,10 @@ def _coerce_sympy_field(value: BigOperatorValue, field: str) -> sympy.Expr | sym
+@@ -233,6 +247,12 @@ def _coerce_sympy_field(value: BigOperatorValue, field: str) -> sympy.Expr | sym
 
  def _encode_sympy_field(value: BigOperatorValue, field: str) -> psu.SympyJson:
      value = _coerce_sympy_field(value, field)
-+    if value.has(sympy.Tuple):
++    if value.has(sympy.Tuple) or value.has(
++        sympy.Sum, sympy.Product, sympy.Integral, sympy.Limit
++    ):
 +        raise ValueError(
 +            f'Big-operator field "{field}" cannot contain SymPy Tuple values or nested big operators.'
 +        )
      return psu.sympy_to_json(value, allow_sets=True)
 
 
-@@ -466,6 +482,85 @@ def big_operator_to_json(
+@@ -466,6 +486,85 @@ def big_operator_to_json(
              raise ValueError(f"Big operator has unsupported {indexing=}")
 
 
@@ -849,7 +853,7 @@ index 0e4e8b4..940a7a7 100644
  def json_to_big_operator(value: BigOperatorJson | object) -> BigOperator:
      """Validate and decode a version 1 big-operator answer.
 
-@@ -572,8 +667,10 @@ __all__ = [
+@@ -572,8 +671,10 @@ __all__ = [
      "BigOperatorName",
      "BigOperatorSympyName",
      "BigOperatorValue",

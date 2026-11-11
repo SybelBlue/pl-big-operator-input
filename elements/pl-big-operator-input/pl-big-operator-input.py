@@ -655,7 +655,8 @@ def _sympy_to_big_operator_json(
     if not isinstance(value, sympy.Limit):
         if len(value.limits) != 1:
             raise ValueError("Correct answer must have exactly one indexing tuple.")
-        if value.limits and not isinstance(value.limits[0][0], sympy.Symbol):
+        binder = cast(tuple[sympy.Basic, ...], value.limits[0])
+        if not isinstance(binder[0], sympy.Symbol):
             raise TypeError("Correct answer index must be a symbol.")
 
     encoded = pbo.sympy_to_big_operator_json(cast(Any, value))

@@ -213,7 +213,9 @@ def _decode_sympy_field(value: Any, field: str) -> sympy.Basic:
         ) from exc
     if not isinstance(decoded, sympy.Basic):
         raise TypeError(f'Big-operator field "{field}" must decode to a SymPy value.')
-    if decoded.has(sympy.Tuple):
+    if decoded.has(sympy.Tuple) or decoded.has(
+        sympy.Sum, sympy.Product, sympy.Integral, sympy.Limit
+    ):
         raise ValueError(
             f'Big-operator field "{field}" cannot contain SymPy Tuple values or nested big operators.'
         )
@@ -245,7 +247,9 @@ def _coerce_sympy_field(value: BigOperatorValue, field: str) -> sympy.Expr | sym
 
 def _encode_sympy_field(value: BigOperatorValue, field: str) -> psu.SympyJson:
     value = _coerce_sympy_field(value, field)
-    if value.has(sympy.Tuple):
+    if value.has(sympy.Tuple) or value.has(
+        sympy.Sum, sympy.Product, sympy.Integral, sympy.Limit
+    ):
         raise ValueError(
             f'Big-operator field "{field}" cannot contain SymPy Tuple values or nested big operators.'
         )

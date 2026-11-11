@@ -271,7 +271,10 @@ class TestBigOperatorSerializationUnits:
         assert encoded["indexing"] == indexing
         assert decoded["operator"] == operator
         assert decoded["indexing"] == indexing
-        assert decoded["body"] == value.function
+        expected_body = (
+            value.args[0] if isinstance(value, sympy.Limit) else value.function
+        )
+        assert decoded["body"] == expected_body
         json.dumps(encoded, allow_nan=False)
 
     @pytest.mark.parametrize(
@@ -288,6 +291,7 @@ class TestBigOperatorSerializationUnits:
         )
         decoded = pbo.json_to_big_operator(encoded)
 
+        assert encoded["indexing"] == "approaches"
         assert encoded["direction"] == expected
         assert decoded["indexing"] == "approaches"
         assert decoded["direction"] == expected
@@ -298,14 +302,19 @@ class TestBigOperatorSerializationUnits:
         k = sympy.Symbol("k", integer=True)
         n = sympy.Symbol("n", positive=True)
         custom = sympy.Function("custom")
+        value = cast(
+            pbo.SympyBigOperator,
+            sympy.Sum(custom(k) + n, (k, 1, n)),
+        )
 
-        encoded = pbo.sympy_to_big_operator_json(sympy.Sum(custom(k) + n, (k, 1, n)))
+        encoded = pbo.sympy_to_big_operator_json(value)
         decoded = pbo.json_to_big_operator(encoded)
 
         assert decoded["index"].is_integer is True
+        assert decoded["indexing"] == "bounds"
         assert decoded["upper"].is_positive is True
         assert decoded["body"].has(custom)
-        assert encoded["body"]["_custom_functions"] == ["custom"]
+        assert encoded["body"].get("_custom_functions") == ["custom"]
 
     def test_sympy_serializer_rejects_unsupported_shapes(self) -> None:
         k, j = sympy.symbols("k j")
@@ -314,18 +323,31 @@ class TestBigOperatorSerializationUnits:
         with pytest.raises(ValueError, match="Indefinite SymPy Integral"):
             pbo.sympy_to_big_operator_json(sympy.Integral(k, k))
         with pytest.raises(ValueError, match="exactly one binder"):
-            pbo.sympy_to_big_operator_json(sympy.Sum(k, (k, 1, 2), (j, 1, 2)))
+            pbo.sympy_to_big_operator_json(
+                cast(
+                    pbo.SympyBigOperator,
+                    sympy.Sum(k, (k, 1, 2), (j, 1, 2)),
+                )
+            )
         with pytest.raises(TypeError, match="index.*must be a SymPy symbol"):
             pbo.sympy_to_big_operator_json(cast(Any, malformed_index))
         with pytest.raises(TypeError, match="Expected a SymPy"):
             pbo.sympy_to_big_operator_json(cast(Any, k + 1))
 
-    def test_sympy_serializer_rejects_nested_big_operators(self) -> None:
+    @pytest.mark.parametrize("nested_operator", ["Integral", "Limit"])
+    def test_sympy_serializer_rejects_nested_big_operators(
+        self, nested_operator: str
+    ) -> None:
         k, j = sympy.symbols("k j")
-        nested = sympy.Sum(sympy.Integral(k, (k, 0, 1)), (j, 1, 2))
+        inner = (
+            sympy.Integral(k, (k, 0, 1))
+            if nested_operator == "Integral"
+            else sympy.Limit(sympy.sin(k) / k, k, 0)
+        )
+        nested = sympy.Sum(inner, (j, 1, 2))
 
         with pytest.raises(ValueError, match="nested big operators"):
-            pbo.sympy_to_big_operator_json(nested)
+            pbo.sympy_to_big_operator_json(cast(pbo.SympyBigOperator, nested))
 
 
 class TestCorrectAnswerParsingUnits:
@@ -1976,7 +1998,9 @@ class TestLifecycleRegressions:
         k = sympy.Symbol("k")
         a = sympy.Symbol("a", positive=True)
         answer = (
-            pbo.sympy_to_big_operator_json(sympy.Sum(a, (k, 1, 2)))
+            pbo.sympy_to_big_operator_json(
+                cast(pbo.SympyBigOperator, sympy.Sum(a, (k, 1, 2)))
+            )
             if representation == "sympy"
             else pbo.big_operator_to_json(
                 operator="Sum",
