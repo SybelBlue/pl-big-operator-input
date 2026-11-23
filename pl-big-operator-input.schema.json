@@ -31,8 +31,16 @@
       "format": "integer"
     },
     "body-size": {
-      "type": "string",
-      "format": "integer"
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "integer"
+        },
+        {
+          "type": "string",
+          "enum": ["fill"]
+        }
+      ]
     },
     "correct-answer": {
       "type": "string",
