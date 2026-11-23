@@ -1,9 +1,20 @@
 .pl-big-operator-input {
   --pl-big-operator-input-gap: 0.8rem;
+  --pl-big-operator-input-max-height: 80vh;
 
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: var(--pl-big-operator-input-max-height);
+  margin: 0.25rem 0;
+  overflow: auto;
+}
+
+.pl-big-operator-input__content {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--pl-big-operator-input-gap);
-  margin: 0.25rem 0;
+  margin: auto;
 }
 
 .pl-big-operator-input--inline {
@@ -13,12 +24,37 @@
 
 .pl-big-operator-input--block {
   display: flex;
-  justify-content: center;
   width: 100%;
 }
 
-.pl-big-operator-input__submission {
-  align-items: center;
+.pl-big-operator-input--body-fill > .pl-big-operator-input__content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pl-big-operator-input--body-fill
+  > .pl-big-operator-input__content
+  > :not(.pl-big-operator-input__body) {
+  flex: 0 0 auto;
+}
+
+.pl-big-operator-input--body-fill .pl-big-operator-input__body {
+  flex: 1 1 auto;
+  min-width: var(--pl-big-operator-input-body-size);
+}
+
+.pl-big-operator-input--body-fill .pl-big-operator-input__body > .d-inline-block,
+.pl-big-operator-input--body-fill .pl-big-operator-input__body .input-group {
+  width: 100%;
+  min-width: 0;
+}
+
+.pl-big-operator-input--body-fill .pl-big-operator-input__body math-field {
+  width: 100%;
+  min-width: 0 !important;
+}
+
+.pl-big-operator-input__submission > .pl-big-operator-input__content {
   gap: 0.4rem;
 }
 

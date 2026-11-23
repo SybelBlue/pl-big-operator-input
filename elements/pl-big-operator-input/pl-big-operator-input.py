@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     type AllowedBlank = Literal["none", "indices", "body", "all"]
 
     type FormattedCall = tuple[str, tuple[str, ...]]
+    type BodySize = int | Literal["fill"]
 
 HERE: Final = Path(__file__).parent
 SCHEMA_PATH: Final = HERE / "pl-big-operator-input.schema.json"
@@ -167,7 +168,7 @@ class RenderConfig:
     imaginary_unit: str
     display_log_as_ln: bool
     show_help_text: bool
-    body_size: int
+    body_size: BodySize
     index_field_size: int
     grading: GradingMethod
     body_weight: int
@@ -432,8 +433,20 @@ def _config(html: str, data: QuestionData | None = None) -> RenderConfig:
         raise ValueError(
             f'Operator "{operator}" does not support indexing="{indexing}"; use {", ".join(sorted(allowed))}.'
         )
-    body_size = pl.get_integer_attrib(element, "body-size", BODY_SIZE_DEFAULT)
-    if body_size < 1:
+    display = pl.get_enum_attrib(element, "display", DisplayType, DISPLAY_DEFAULT)
+    body_size_attribute = pl.get_string_attrib(
+        element, "body-size", str(BODY_SIZE_DEFAULT)
+    )
+    body_size: BodySize = (
+        "fill"
+        if body_size_attribute == "fill"
+        else pl.get_integer_attrib(element, "body-size", BODY_SIZE_DEFAULT)
+    )
+    if body_size == "fill" and display != DisplayType.BLOCK:
+        raise ValueError(
+            'Attribute "body-size" can only be fill in block display mode.'
+        )
+    if isinstance(body_size, int) and body_size < 1:
         raise ValueError('Attribute "body-size" must be positive.')
     default_index_field_size = (
         BOUNDS_INDEX_FIELD_SIZE_DEFAULT
@@ -508,7 +521,7 @@ def _config(html: str, data: QuestionData | None = None) -> RenderConfig:
         direction=direction,
         allow_direction_input=allow_direction_input,
         allowed_blank=allowed_blank,
-        display=pl.get_enum_attrib(element, "display", DisplayType, DISPLAY_DEFAULT),
+        display=display,
         allow_complex=pl.get_boolean_attrib(element, "allow-complex", False),
         imaginary_unit=imaginary_unit,
         display_log_as_ln=pl.get_boolean_attrib(
@@ -986,13 +999,22 @@ def _question_mustache(config: RenderConfig, data: QuestionData) -> str:
         "prefix_latex": config.prefix_latex,
         "suffix_latex": config.suffix_latex,
         "index_label": index,
-        "body_size": config.body_size,
+        "body_fill": config.body_size == "fill",
+        "body_size_css": (
+            f"{config.body_size}ch"
+            if isinstance(config.body_size, int)
+            else f"{BODY_SIZE_DEFAULT}ch"
+        ),
         "index_field_size": config.index_field_size,
         "body_field": _symbolic_field(
             config,
             component="body",
             label="Operator body",
-            size=config.body_size,
+            size=(
+                config.body_size
+                if isinstance(config.body_size, int)
+                else BODY_SIZE_DEFAULT
+            ),
             data=data,
             score=component_scores.get("body"),
         ),

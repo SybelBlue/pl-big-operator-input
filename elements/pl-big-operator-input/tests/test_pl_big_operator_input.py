@@ -120,6 +120,24 @@ class TestConfigurationUnits:
 
         assert config.allowed_blank == allowed_blank
 
+    @pytest.mark.parametrize(
+        ("body_size", "expected"), [(None, 16), ("24", 24), ("fill", "fill")]
+    )
+    def test_body_size_values(
+        self, body_size: str | None, expected: int | Literal["fill"]
+    ) -> None:
+        config = big_operator_input._config(
+            html(operator="Sum", **{"body-size": body_size})
+        )
+
+        assert config.body_size == expected
+
+    def test_fill_body_size_requires_block_display(self) -> None:
+        with pytest.raises(ValueError, match="can only be fill in block display mode"):
+            big_operator_input._config(
+                html(operator="Sum", display="inline", **{"body-size": "fill"})
+            )
+
     @pytest.mark.parametrize(("imaginary_unit", "expected"), [(None, "i"), ("j", "j")])
     def test_imaginary_unit_for_display(
         self, imaginary_unit: str | None, expected: str
@@ -1590,6 +1608,36 @@ class TestRenderUnits:
                 '" pl-big-operator-input__submission-value ")]'
             )
             assert len(submission_values) == 1
+
+    @pytest.mark.parametrize("display", ["inline", "block"])
+    @pytest.mark.parametrize("panel", ["question", "answer", "submission"])
+    def test_content_is_grouped_inside_scroll_container(
+        self,
+        display: Literal["inline", "block"],
+        panel: Literal["question", "answer", "submission"],
+    ) -> None:
+        markup = html(operator="Sum", display=display)
+        data = question_data(panel=panel)
+        big_operator_input.prepare(markup, data)
+
+        root = lxml.html.fragment_fromstring(big_operator_input.render(markup, data))
+        content = root.xpath(
+            './*[contains(concat(" ", normalize-space(@class), " "), '
+            '" pl-big-operator-input__content ")]'
+        )
+
+        assert len(content) == 1
+        assert content[0].text_content().strip()
+
+    def test_fill_body_size_marks_block_layout(self) -> None:
+        markup = html(operator="Sum", **{"body-size": "fill"})
+        data = question_data()
+        big_operator_input.prepare(markup, data)
+
+        root = lxml.html.fragment_fromstring(big_operator_input.render(markup, data))
+
+        assert "pl-big-operator-input--body-fill" in root.classes
+        assert "--pl-big-operator-input-body-size: 16ch" in root.attrib["style"]
 
     def test_question_panel_configures_imaginary_unit_for_every_field(self) -> None:
         rendered = big_operator_input.render(
