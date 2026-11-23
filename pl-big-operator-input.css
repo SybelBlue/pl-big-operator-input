@@ -5,7 +5,8 @@
   box-sizing: border-box;
   max-width: 100%;
   max-height: var(--pl-big-operator-input-max-height);
-  margin: 0.25rem 0;
+  /* Leave room for Bootstrap focus rings inside this scroll container. */
+  padding: 0.25rem;
   overflow: auto;
 }
 
