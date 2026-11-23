@@ -1,5 +1,6 @@
 {
   "include": ["**/*.mustache", "**/question.html"],
+  "pluginModule": "./scripts/htmlmustache-plugin.mjs",
   "rules": {
     "preferMustacheComments": "warning",
     "customTagSchema": "error",
